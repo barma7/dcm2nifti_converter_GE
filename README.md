@@ -3,28 +3,28 @@
 [![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A robust, modular DICOM to NIfTI converter specifically designed for GE MRI sequences. This tool provides specialized converters for different MRI sequence types with proper handling of multi-echo data, slice positioning, and metadata preservation.
+A modular DICOM to NIfTI converter specifically designed for GE MRI sequences. This tool provides converters for different MRI sequence types with proper handling of multi-echo data, slice positioning, and metadata preservation.
 
 ## 🚀 Features
 
-- **Modular Architecture**: Each sequence type has its own specialized converter
+- **Modular Architecture**: Each sequence type has its own converter class
 - **Multi-Echo Support**: Automatic echo time detection and 4D volume creation
-- **Flexible CLI**: Command-line interface with extensive options
+- **CLI**: Command-line interface with different options for different converters (to handle co-registration for example)
 - **Batch Processing**: Support for batch conversion of multiple sequences
-- **Robust Error Handling**: Comprehensive validation and error reporting
+- **Error Handling**: Comprehensive validation and error reporting
 - **Extensible Design**: Easy to add new sequence types
-- **Rich Metadata**: Preserves important DICOM metadata in output files
+- **Metadata**: Preserves some DICOM metadata in output files
 
 ## 🔬 Supported Sequences
 
 | Sequence | Description | Features |
 |----------|-------------|----------|
-| **MESE** | Multi-Echo Spin Echo | T2 mapping, automatic echo detection, 4D output |
-| **DESS** | Dual Echo Steady State | Cartilage imaging, interleaved slice handling |
-| **UTE** | Ultra-short Echo Time | Short T2 imaging, optional co-registration |
-| **UTE_SR** | UTE Saturation Recovery | Porosity mapping, multi-series combination |
+| **MESE** | Multi-Echo Spin Echo | 
+| **DESS** | Dual Echo Steady State |
+| **UTE** | Ultra-short Echo Time | Short T2 imaging, optional co-registration for multi-series |
+| **UTE_SR** | UTE Suppression Ratio | Porosity mapping, multi-series combination |
 | **IDEAL** | Iterative Decomposition | Water/fat separation sequences |
-| **General Series** | Multi-echo sequences | Groups by echo time, general purpose |
+| **General Series** | Groups by echo time, general purpose |
 
 ## 📦 Installation
 
@@ -34,7 +34,7 @@ A robust, modular DICOM to NIfTI converter specifically designed for GE MRI sequ
 
 ### Install from source
 ```bash
-git clone https://github.com/YOUR_USERNAME/dcm2nifti_converter_GE.git
+git clone https://github.com/barma7/dcm2nifti_converter_GE.git
 cd dcm2nifti_converter_GE
 pip install -e .
 ```
