@@ -19,18 +19,19 @@ from ..utils import (
     sitk_image_from_array,
     create_4d_direction_matrix,
     save_nifti_image,
-    save_metadata
+    save_metadata,
+    save_structured_metadata
 )
 
 
 class GeneralSeriesConverter(SequenceConverter):
     """
-    General converter for multi-echo DICOM sequences.
+    General converter for DICOM sequences with single or multiple echo times.
     
     This converter automatically groups DICOM images by echo time and creates
-    4D NIfTI volumes with proper echo time metadata. It processes all files
-    in the input folder regardless of series number, grouping them purely
-    by echo time.
+    3D NIfTI volumes for single echo sequences or 4D NIfTI volumes for multi-echo
+    sequences with proper echo time metadata. It processes all files in the input 
+    folder regardless of series number, grouping them purely by echo time.
     """
     
     def __init__(self):
@@ -90,7 +91,10 @@ class GeneralSeriesConverter(SequenceConverter):
     def convert(self, input_folder: Union[str, Path], output_folder: Union[str, Path], 
                 sort_by_position: bool = True, **kwargs) -> ConversionResult:
         """
-        Convert multi-echo DICOM series to NIfTI format, grouping by echo time.
+        Convert DICOM series to NIfTI format, grouping by echo time.
+        
+        Handles both single echo sequences (creates 3D NIfTI) and multi-echo 
+        sequences (creates individual 3D files plus 4D volume).
         
         Args:
             input_folder: Path to the folder containing DICOM files
@@ -106,7 +110,7 @@ class GeneralSeriesConverter(SequenceConverter):
             if not self.validate_input(input_folder, sort_by_position=sort_by_position, **kwargs):
                 raise ValueError("Input validation failed")
             
-            self.logger.info(f"Converting general multi-echo sequence")
+            self.logger.info(f"Converting general sequence")
             self.logger.info(f"Sort by position: {sort_by_position}")
             
             output_path = Path(output_folder)
@@ -139,7 +143,7 @@ class GeneralSeriesConverter(SequenceConverter):
             
             # Process the echo group
             result = self._process_echo_group(
-                echo_dict, output_path, "multiecho", sort_by_position
+                echo_dict, output_path, sort_by_position
             )
             
             output_files = result['output_files']
@@ -153,11 +157,11 @@ class GeneralSeriesConverter(SequenceConverter):
             }
             
             # Save conversion metadata
-            metadata_path = output_path / 'conversion_metadata.txt'
-            save_metadata(metadata, str(metadata_path))
+            metadata_path = output_path / 'conversion_metadata.json'
+            save_structured_metadata(metadata, str(metadata_path))
             output_files.append(str(metadata_path))
             
-            self.logger.info(f"General echo conversion completed successfully")
+            self.logger.info(f"General sequence conversion completed successfully")
             self.logger.info(f"Processed {len(echo_dict)} echo times with {len(output_files)} total files")
             
             return ConversionResult(
@@ -198,7 +202,7 @@ class GeneralSeriesConverter(SequenceConverter):
         return dict(echo_dict)
     
     def _process_echo_group(self, echo_dict: Dict[float, List[str]], 
-                           output_path: Path, group_key: str, 
+                           output_path: Path, 
                            sort_by_position: bool) -> Dict[str, Any]:
         """
         Process echo files to create 4D NIfTI volume.
@@ -206,7 +210,6 @@ class GeneralSeriesConverter(SequenceConverter):
         Args:
             echo_dict: Dictionary mapping echo times to file lists
             output_path: Output directory path
-            group_key: Identifier for this group
             sort_by_position: Whether to sort files by spatial position
             
         Returns:
@@ -218,7 +221,7 @@ class GeneralSeriesConverter(SequenceConverter):
         self.logger.info(f"Processing {len(echo_times)} echoes: {echo_times}")
         
         # Create group output directory
-        group_output = output_path / group_key
+        group_output = output_path
         group_output.mkdir(exist_ok=True)
         
         echo_images = []
@@ -226,7 +229,7 @@ class GeneralSeriesConverter(SequenceConverter):
         processed_echo_times = []
         
         # Process each echo
-        for echo_time in echo_times:
+        for i, echo_time in enumerate(echo_times):
             file_list = echo_dict[echo_time]
             
             if sort_by_position:
@@ -255,7 +258,7 @@ class GeneralSeriesConverter(SequenceConverter):
                 processed_echo_times.append(echo_time)
                 
                 # Save individual echo
-                echo_filename = f"echo_{len(processed_echo_times):02d}_TE_{echo_time:.2f}ms.nii.gz"
+                echo_filename = f"echo_{i+1:01d}.nii.gz"
                 echo_path = group_output / echo_filename
                 save_nifti_image(echo_image, str(echo_path))
                 
@@ -266,7 +269,7 @@ class GeneralSeriesConverter(SequenceConverter):
                 continue
         
         if not echo_images:
-            raise ValueError(f"No valid echoes found for group {group_key}")
+            raise ValueError(f"No valid echoes found")
         
         # Create 4D image if multiple echoes
         output_files = []
@@ -287,10 +290,13 @@ class GeneralSeriesConverter(SequenceConverter):
             images.append(image_4d)
             
             self.logger.info(f"Created 4D volume with {len(echo_images)} echoes")
+        else:
+            # Single echo case - no 4D volume needed
+            self.logger.info(f"Single echo found - no 4D volume created")
         
         # Add individual echo files to output list
         for i, echo_time in enumerate(processed_echo_times):
-            echo_filename = f"echo_{i+1:02d}_TE_{echo_time:.2f}ms.nii.gz"
+            echo_filename = f"echo_{i+1:01d}.nii.gz"
             echo_path = group_output / echo_filename
             output_files.append(str(echo_path))
         
@@ -305,17 +311,26 @@ class GeneralSeriesConverter(SequenceConverter):
         first_file = echo_dict[processed_echo_times[0]][0]
         first_dcm = pydicom.dcmread(first_file)
         
+        # Save repetition time metadata
+        flip_angle = float(getattr(first_dcm, 'FlipAngle', 0))
+        flip_angle_path = group_output / 'flip_angle.txt'
+        save_metadata([flip_angle], str(flip_angle_path))
+        rep_time = float(getattr(first_dcm, 'RepetitionTime', 0))
+        rep_time_path = group_output / 'repetition_time.txt'
+        save_metadata([rep_time], str(rep_time_path))
+        output_files.append(str(rep_time_path))
+        output_files.append(str(flip_angle_path))
+        
         metadata = {
-            'group_key': group_key,
             'num_echoes': len(processed_echo_times),
             'echo_times': processed_echo_times,
             'echo_time_range': [min(processed_echo_times), max(processed_echo_times)],
+            'repetition_time': rep_time,
             'slice_thickness': get_slice_thickness(first_file),
             'center_frequency': float(getattr(first_dcm, 'ImagingFrequency', 0)),
             'files_per_echo': {f"{et:.2f}": len(echo_dict[et]) for et in processed_echo_times},
             'image_size': list(echo_images[0].GetSize()) if echo_images else [],
-            'spacing': list(echo_images[0].GetSpacing()) if echo_images else [],
-            'echo_images': echo_images
+            'spacing': list(echo_images[0].GetSpacing()) if echo_images else []
         }
         
         return {
@@ -335,18 +350,19 @@ class GeneralSeriesConverter(SequenceConverter):
             'sequence_name': self.sequence_name,
             'required_parameters': self.required_parameters,
             'optional_parameters': self.optional_parameters,
-            'description': 'Converts general multi-echo DICOM series to NIfTI format, grouped by echo time',
+            'description': 'Converts DICOM series to NIfTI format, grouping by echo time (supports single or multi-echo)',
             'parameter_details': {
                 'sort_by_position': 'Whether to sort files by spatial position (default: True)'
             },
             'outputs': [
-                'Individual echo files: echo_XX_TE_YYms.nii.gz',
-                '4D multi-echo volume: 4d_multiecho.nii.gz (if >1 echo)',
+                'Individual echo files: echo_X.nii.gz',
+                '4D multi-echo volume: 4d_multiecho.nii.gz (if multiple echoes)',
                 'Echo times metadata: echo_times.txt',
-                'Conversion metadata: conversion_metadata.txt'
+                'Repetition time metadata: repetition_time.txt',
+                'Conversion metadata: conversion_metadata.json'
             ],
             'use_cases': [
-                'Multi-echo sequences without specific converters',
+                'Single or multi-echo sequences without specific converters',
                 'Custom echo time analysis',
                 'Research sequences with variable echo times',
                 'Quality control and data exploration'

@@ -128,6 +128,21 @@ output_folder/
 └── conversion_metadata.txt      # Conversion parameters
 ```
 
+## 🔄 Batch Processing Scripts
+
+The `scripts/` folder contains PowerShell scripts for batch processing multiple DICOM folders:
+
+- **`batch_convert.ps1`**: Flexible script for any converter type with customizable parameters
+- **`batch_general_echo_example.ps1`**: Ready-to-use script for specific studies
+
+**Example batch processing:**
+```powershell
+cd scripts
+.\batch_convert.ps1 -ExamPath "D:\Research\Projects\study\exam_date" -Converter "general_echo" -DicomFolders @("003","004","005") -OutputFolders @("1","2","3")
+```
+
+See `scripts/README.md` for detailed usage instructions.
+
 ## 🏗️ Architecture
 
 The converter uses a modular architecture with:

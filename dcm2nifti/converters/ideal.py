@@ -113,7 +113,12 @@ class IDEALConverter(SequenceConverter):
         try:
             # Validate inputs
             if not self.validate_input(input_folder, complex=complex, invert=invert, **kwargs):
-                raise ValueError("Input validation failed")
+                return ConversionResult(
+                    success=False,
+                    message="Input validation failed",
+                    output_files=[],
+                    metadata={}
+                )
             
             self.logger.info(f"Converting IDEAL sequence (complex={complex}, invert={invert})")
             
@@ -125,7 +130,12 @@ class IDEALConverter(SequenceConverter):
             dicom_names = series_reader.GetGDCMSeriesFileNames(str(input_folder))
             
             if not dicom_names:
-                raise ValueError("No DICOM files found in the input folder")
+                return ConversionResult(
+                    success=False,
+                    message="No DICOM files found in the input folder",
+                    output_files=[],
+                    metadata={}
+                )
             
             # Get metadata from first DICOM
             first_dicom = pydicom.dcmread(dicom_names[0])
@@ -133,7 +143,6 @@ class IDEALConverter(SequenceConverter):
             center_freq = [float(first_dicom.ImagingFrequency)]  # in MHz
             
             output_files = []
-            images = []
             metadata = {
                 'sequence_type': 'IDEAL',
                 'complex_mode': complex,
@@ -148,21 +157,32 @@ class IDEALConverter(SequenceConverter):
                     dicom_names, output_path, slice_thickness, invert, series_reader
                 )
                 if not result['success']:
-                    raise ValueError(result['message'])
+                    return ConversionResult(
+                        success=False,
+                        message=result['message'],
+                        output_files=[],
+                        metadata={}
+                    )
                 
                 output_files.extend(result['output_files'])
                 metadata.update(result['metadata'])
-                images.extend(result.get('images', []))
                 
             else:
                 # Process magnitude-only data using MESE converter
                 self.logger.info("Processing magnitude-only IDEAL data using MESE converter")
                 mese_result = self.mese_converter.convert(input_folder, output_folder)
                 
+                if not mese_result.success:
+                    return ConversionResult(
+                        success=False,
+                        message=f"Failed to convert magnitude IDEAL data: {mese_result.message}",
+                        output_files=[],
+                        metadata={}
+                    )
+                
                 output_files.extend(mese_result.output_files)
                 metadata.update(mese_result.metadata)
                 metadata['processed_as'] = 'magnitude_only_mese'
-                images.extend(mese_result.images)
             
             # Save center frequency metadata
             center_freq_path = output_path / 'center_freq.txt'
@@ -172,15 +192,20 @@ class IDEALConverter(SequenceConverter):
             self.logger.info(f"IDEAL conversion completed successfully")
             
             return ConversionResult(
-                images=images,
-                metadata=metadata,
+                success=True,
+                message=f"Successfully converted IDEAL sequence with {len(output_files)} output files",
                 output_files=output_files,
-                sequence_type='IDEAL'
+                metadata=metadata
             )
             
         except Exception as e:
             self.logger.error(f"Error in IDEAL conversion: {e}")
-            raise ValueError(f"Conversion failed: {str(e)}")
+            return ConversionResult(
+                success=False,
+                message=f"Conversion failed: {str(e)}",
+                output_files=[],
+                metadata={}
+            )
     
     def _convert_complex_ideal(self, dicom_names: List[str], output_path: Path, 
                               slice_thickness: float, invert: bool, 
@@ -245,8 +270,8 @@ class IDEALConverter(SequenceConverter):
                     
                     # Correct spacing
                     spacing = echo_image.GetSpacing()
-                    #correct_spacing = (spacing[0], spacing[1], slice_thickness)
-                    #echo_image = sitk_image_from_array(echo_volume, correct_spacing, echo_image)
+                    correct_spacing = (spacing[0], spacing[1], slice_thickness)
+                    echo_image = sitk_image_from_array(echo_volume, correct_spacing, echo_image)
                     
                     # Extract echo time from headers
                     echo_header = copy_image_headers(dicom_names_echo)
@@ -256,7 +281,7 @@ class IDEALConverter(SequenceConverter):
                     echo_volumes.append(echo_volume)
                 
                 # Create 4D image
-                direction_4d = create_4d_direction_matrix(echo_images[0].GetDirection())
+                direction_4d = create_4d_direction_matrix(echo_images[0])
                 image_4d = sitk.JoinSeries(echo_images)
                 image_4d.SetDirection(direction_4d)
                 
@@ -301,7 +326,6 @@ class IDEALConverter(SequenceConverter):
                 'success': True,
                 'message': 'Complex IDEAL conversion completed',
                 'output_files': output_files,
-                'images': images_4d + [echo for echo_list in echo_images_list for echo in echo_list],
                 'metadata': metadata
             }
             

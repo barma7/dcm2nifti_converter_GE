@@ -8,6 +8,7 @@ import nibabel as nib
 from typing import Union, List, Any, Dict
 from pathlib import Path
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -162,3 +163,46 @@ def validate_output_files(output_files: List[Union[str, Path]]) -> bool:
                 all_valid = False
     
     return all_valid
+
+
+def save_structured_metadata(data: Dict[str, Any], 
+                            output_path: Union[str, Path]) -> None:
+    """
+    Save structured metadata (dictionaries, lists) to a JSON file.
+    
+    Args:
+        data: Dictionary or other structured data to save
+        output_path: Output file path
+    """
+    try:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Convert any non-serializable objects to strings
+        def serialize_data(obj):
+            if hasattr(obj, '__dict__'):
+                return str(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif hasattr(obj, 'tolist'):
+                return obj.tolist()
+            else:
+                return obj
+        
+        # Create a serializable copy of the data
+        serializable_data = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                serializable_data[key] = {k: serialize_data(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                serializable_data[key] = [serialize_data(v) for v in value]
+            else:
+                serializable_data[key] = serialize_data(value)
+        
+        with open(output_path, 'w') as f:
+            json.dump(serializable_data, f, indent=2)
+        
+        logger.info(f"Saved structured metadata to {output_path}")
+    except Exception as e:
+        logger.error(f"Failed to save structured metadata to {output_path}: {e}")
+        raise

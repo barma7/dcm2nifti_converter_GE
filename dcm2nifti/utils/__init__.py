@@ -24,6 +24,7 @@ from .image_utils import (
 from .file_utils import (
     save_nifti_image,
     save_metadata,
+    save_structured_metadata,
     load_metadata,
     save_conversion_summary,
     create_nibabel_image,
@@ -51,6 +52,7 @@ __all__ = [
     # file_utils
     'save_nifti_image',
     'save_metadata',
+    'save_structured_metadata',
     'load_metadata',
     'save_conversion_summary',
     'create_nibabel_image',
