@@ -131,7 +131,7 @@ class UTEConverter(SequenceConverter):
         echo_images = []
         echo_times = []
         center_freqs = []
-        
+    
         self.logger.info(f"Processing {len(series_numbers)} series without registration")
         
         # Process each series
@@ -143,7 +143,6 @@ class UTEConverter(SequenceConverter):
             dicom_files = series_reader.GetGDCMSeriesFileNames(str(series_folder))
             
             # Get metadata
-            slice_thickness = get_slice_thickness(dicom_files[0])
             analysis = analyze_dicom_series(dicom_files)
             
             # Extract center frequency
@@ -166,20 +165,12 @@ class UTEConverter(SequenceConverter):
                 series_reader.SetFileNames(echo_dicom_files)
                 echo_image = series_reader.Execute()
                 echo_image = sitk.Cast(echo_image, sitk.sitkFloat32)
-                
-                # Get correct spacing
-                spacing = echo_image.GetSpacing()
-                correct_spacing = (spacing[0], spacing[1], slice_thickness)
-                
-                # Create image with correct spacing
-                echo_volume = sitk.GetArrayFromImage(echo_image)
-                echo_image_corrected = sitk_image_from_array(echo_volume, correct_spacing, echo_image)
-                
+                        
                 # Extract echo time
                 echo_headers = copy_image_headers(echo_dicom_files)
                 echo_time = float(echo_headers[1].get('EchoTime', 0))
                 
-                echo_images.append(echo_image_corrected)
+                echo_images.append(echo_image)
                 echo_times.append(echo_time)
                 center_freqs.append(center_freq)
                 
@@ -280,19 +271,11 @@ class UTEConverter(SequenceConverter):
                 echo_image = series_reader.Execute()
                 echo_image = sitk.Cast(echo_image, sitk.sitkFloat32)
                 
-                # Get correct spacing
-                spacing = echo_image.GetSpacing()
-                correct_spacing = (spacing[0], spacing[1], slice_thickness)
-                
-                # Create image with correct spacing
-                echo_volume = sitk.GetArrayFromImage(echo_image)
-                echo_image_corrected = sitk_image_from_array(echo_volume, correct_spacing, echo_image)
-                
                 # Extract echo time
                 echo_headers = copy_image_headers(echo_dicom_files)
                 echo_time = float(echo_headers[0].get('EchoTime', 0))
                 
-                series_images.append(echo_image_corrected)
+                series_images.append(echo_image)
                 series_times.append(echo_time)
                 
                 slicer_idx += nb_slices

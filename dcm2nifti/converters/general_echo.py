@@ -242,17 +242,6 @@ class GeneralSeriesConverter(SequenceConverter):
             try:
                 echo_image = series_reader.Execute()
                 echo_image = sitk.Cast(echo_image, sitk.sitkFloat32)
-                
-                # Get slice thickness from first file
-                slice_thickness = get_slice_thickness(file_list[0])
-                
-                # Correct spacing if needed
-                spacing = echo_image.GetSpacing()
-                if len(spacing) >= 3:
-                    correct_spacing = (spacing[0], spacing[1], slice_thickness)
-                    echo_volume = sitk.GetArrayFromImage(echo_image)
-                    echo_image = sitk_image_from_array(echo_volume, correct_spacing, echo_image)
-                
                 echo_images.append(echo_image)
                 echo_volumes.append(sitk.GetArrayFromImage(echo_image))
                 processed_echo_times.append(echo_time)
@@ -318,6 +307,13 @@ class GeneralSeriesConverter(SequenceConverter):
         rep_time = float(getattr(first_dcm, 'RepetitionTime', 0))
         rep_time_path = group_output / 'repetition_time.txt'
         save_metadata([rep_time], str(rep_time_path))
+        # if InversionTime is available, save it as well
+        if hasattr(first_dcm, 'InversionTime'):
+            inversion_time = float(first_dcm.InversionTime)
+            inversion_time_path = group_output / 'inversion_time.txt'
+            save_metadata([inversion_time], str(inversion_time_path))
+            output_files.append(str(inversion_time_path))
+
         output_files.append(str(rep_time_path))
         output_files.append(str(flip_angle_path))
         

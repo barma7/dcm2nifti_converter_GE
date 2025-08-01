@@ -153,24 +153,26 @@ def analyze_dicom_series(dicom_files: List[Union[str, Path]]) -> Dict[str, Any]:
     instance_numbers = [h.get('InstanceNumber') for h in headers if h.get('InstanceNumber') is not None]
     acquisition_numbers = [h.get('AcquisitionNumber') for h in headers if h.get('AcquisitionNumber') is not None]
     
+    if len(set(echo_times)) > 1:
+        # the sequence is a multi-echo sequence
+        logger.info("Detected multi-echo sequence")
+    
+    num_echoes = len(set(echo_times)) if echo_times else 1
+    num_slices = len(set(instance_numbers)) // num_echoes if num_echoes > 0 else len(instance_numbers)  
+
     analysis = {
         'num_files': len(dicom_files),
         'unique_echo_times': sorted(list(set(echo_times))) if echo_times else [],
         'unique_echo_numbers': sorted(list(set(echo_numbers))) if echo_numbers else [],
         'unique_instance_numbers': sorted(list(set(instance_numbers))) if instance_numbers else [],
         'unique_acquisition_numbers': sorted(list(set(acquisition_numbers))) if acquisition_numbers else [],
-        'num_echoes': len(set(echo_numbers)) if echo_numbers else 1,
-        'num_slices': len(set(instance_numbers)) if instance_numbers else len(dicom_files),
+        'num_echoes': num_echoes,
+        'num_slices': num_slices,
+        'slices_per_echo': num_slices,
         'mr_acquisition_type': headers[0].get('MRAcquisitionType') if headers else None,
         'imaging_frequency': headers[0].get('ImagingFrequency') if headers else None,
     }
-    
-    # Calculate derived parameters
-    if analysis['num_echoes'] > 0 and analysis['num_slices'] > 0:
-        analysis['slices_per_echo'] = analysis['num_slices'] // analysis['num_echoes']
-    else:
-        analysis['slices_per_echo'] = analysis['num_slices']
-    
+            
     return analysis
 
 
