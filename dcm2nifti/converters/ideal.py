@@ -113,12 +113,7 @@ class IDEALConverter(SequenceConverter):
         try:
             # Validate inputs
             if not self.validate_input(input_folder, complex=complex, invert=invert, **kwargs):
-                return ConversionResult(
-                    success=False,
-                    message="Input validation failed",
-                    output_files=[],
-                    metadata={}
-                )
+                raise ValueError("Input validation failed")
             
             self.logger.info(f"Converting IDEAL sequence (complex={complex}, invert={invert})")
             
@@ -130,13 +125,8 @@ class IDEALConverter(SequenceConverter):
             dicom_names = series_reader.GetGDCMSeriesFileNames(str(input_folder))
             
             if not dicom_names:
-                return ConversionResult(
-                    success=False,
-                    message="No DICOM files found in the input folder",
-                    output_files=[],
-                    metadata={}
-                )
-            
+                raise ValueError("No DICOM files found in the input folder")
+
             # Get metadata from first DICOM
             first_dicom = pydicom.dcmread(dicom_names[0])
             slice_thickness = get_slice_thickness(dicom_names[0])
@@ -156,32 +146,20 @@ class IDEALConverter(SequenceConverter):
                 result = self._convert_complex_ideal(
                     dicom_names, output_path, slice_thickness, invert, series_reader
                 )
-                if not result['success']:
-                    return ConversionResult(
-                        success=False,
-                        message=result['message'],
-                        output_files=[],
-                        metadata={}
-                    )
                 
-                output_files.extend(result['output_files'])
-                metadata.update(result['metadata'])
+                output_files.extend(result.output_files)
+                metadata.update(result.metadata)
                 
             else:
                 # Process magnitude-only data using MESE converter
                 self.logger.info("Processing magnitude-only IDEAL data using MESE converter")
-                mese_result = self.mese_converter.convert(input_folder, output_folder)
+                result = self.mese_converter.convert(input_folder, output_folder)
                 
-                if not mese_result.success:
-                    return ConversionResult(
-                        success=False,
-                        message=f"Failed to convert magnitude IDEAL data: {mese_result.message}",
-                        output_files=[],
-                        metadata={}
-                    )
-                
-                output_files.extend(mese_result.output_files)
-                metadata.update(mese_result.metadata)
+                if not result:
+                    raise ValueError("MESE conversion failed for magnitude-only IDEAL data")
+
+                output_files.extend(result.output_files)
+                metadata.update(result.metadata)
                 metadata['processed_as'] = 'magnitude_only_mese'
             
             # Save center frequency metadata
@@ -191,21 +169,11 @@ class IDEALConverter(SequenceConverter):
             
             self.logger.info(f"IDEAL conversion completed successfully")
             
-            return ConversionResult(
-                success=True,
-                message=f"Successfully converted IDEAL sequence with {len(output_files)} output files",
-                output_files=output_files,
-                metadata=metadata
-            )
+            return result
             
         except Exception as e:
             self.logger.error(f"Error in IDEAL conversion: {e}")
-            return ConversionResult(
-                success=False,
-                message=f"Conversion failed: {str(e)}",
-                output_files=[],
-                metadata={}
-            )
+            raise ValueError(f"Conversion failed: {str(e)}")
     
     def _convert_complex_ideal(self, dicom_names: List[str], output_path: Path, 
                               slice_thickness: float, invert: bool, 
@@ -281,7 +249,7 @@ class IDEALConverter(SequenceConverter):
                     echo_volumes.append(echo_volume)
                 
                 # Create 4D image
-                direction_4d = create_4d_direction_matrix(echo_images[0])
+                direction_4d = create_4d_direction_matrix(echo_images[0].GetDirection())
                 image_4d = sitk.JoinSeries(echo_images)
                 image_4d.SetDirection(direction_4d)
                 
@@ -322,21 +290,17 @@ class IDEALConverter(SequenceConverter):
                 'components_processed': ['real', 'imaginary', 'magnitude']
             }
             
-            return {
-                'success': True,
-                'message': 'Complex IDEAL conversion completed',
-                'output_files': output_files,
-                'metadata': metadata
-            }
-            
+            # Create conversion result
+            return ConversionResult(
+                images=[image_4d],
+                metadata=metadata,
+                output_files=output_files,
+                sequence_type='IDEAL_Complex'
+            )
+
         except Exception as e:
             self.logger.error(f"Error in complex IDEAL conversion: {e}")
-            return {
-                'success': False,
-                'message': f'Complex IDEAL conversion failed: {str(e)}',
-                'output_files': [],
-                'metadata': {}
-            }
+            raise ValueError(f"Conversion failed: {str(e)}")
     
     def get_supported_parameters(self) -> dict:
         """
