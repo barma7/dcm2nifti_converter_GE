@@ -53,8 +53,8 @@ Examples:
                        help='Perform co-registration (for UTE)')
     parser.add_argument('--save_echo_images', action='store_true', default=True,
                        help='Save individual echo images (for DESS)')
-    parser.add_argument('--cv', type=int, default=17, 
-                       help='CV value for MEGRE conversion (17 or 29)')
+    # parser.add_argument('--cv', type=int, default=17, 
+    #                    help='CV value for MEGRE conversion (17 or 29)')
     parser.add_argument('--complex', action='store_true', 
                        help='Process complex data (for IDEAL)')
     parser.add_argument('--invert', action='store_true',
@@ -139,8 +139,8 @@ def build_conversion_kwargs(args: argparse.Namespace) -> Dict[str, Any]:
     if hasattr(args, 'save_echo_images'):
         kwargs['save_echo_images'] = args.save_echo_images
     
-    if args.cv != 17:
-        kwargs['cv'] = args.cv
+    # if args.cv != 17:
+    #     kwargs['cv'] = args.cv
     
     if args.complex:
         kwargs['complex'] = True

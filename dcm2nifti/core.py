@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Type, Union, Any, Optional
 
 from .base import SequenceConverter, ConversionResult
-from .converters import MESEConverter, DESSConverter, UTEConverter, UTESRConverter, IDEALConverter, GeneralSeriesConverter
+from .converters import MESEConverter, DESSConverter, UTEConverter, UTESRConverter, IDEALConverter, MEGREConverter, GeneralSeriesConverter
 
 
 class Dicom2NiftiConverter:
@@ -36,6 +36,7 @@ class Dicom2NiftiConverter:
             'ute': UTEConverter,
             'ute_sr': UTESRConverter,
             'ideal': IDEALConverter,
+            'megre': MEGREConverter,
             'general_echo': GeneralSeriesConverter,
             # Additional converters can be added here
         }

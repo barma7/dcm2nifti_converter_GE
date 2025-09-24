@@ -39,12 +39,16 @@ class TestDicom2NiftiConverter:
         assert 'mese' in sequences
         assert 'dess' in sequences
         assert 'ute' in sequences
+        assert 'ideal' in sequences
+        assert 'ute_sr' in sequences    
+        assert 'megre' in sequences
+        assert 'general_echo' in sequences
     
     def test_get_converter(self):
         """Test getting converter instances."""
-        mese_converter = self.converter.get_converter('mese')
+        mese_converter = self.converter.get_converter('megre')
         assert isinstance(mese_converter, SequenceConverter)
-        assert mese_converter.sequence_name == 'MESE'
+        assert mese_converter.sequence_name == 'MEGRE'
     
     def test_get_converter_invalid_sequence(self):
         """Test error handling for invalid sequence types."""
