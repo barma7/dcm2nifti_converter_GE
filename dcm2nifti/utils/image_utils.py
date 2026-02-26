@@ -59,6 +59,24 @@ def create_4d_direction_matrix(direction_3d: Tuple[float, ...]) -> Tuple[float, 
     # Return as flattened tuple
     return tuple(direction_4d_matrix.flatten())
 
+def create_3d_direction_matrix(direction_4d: Tuple[float, ...]) -> Tuple[float, ...]:
+    """
+    Create a 3D direction matrix from a 4D direction matrix.
+    
+    Args:
+        direction_4d: 4D direction matrix as tuple of 16 floats
+        
+    Returns:
+        3D direction matrix as tuple of 9 floats
+    """
+    # Convert to numpy array and reshape
+    direction_4d_matrix = np.array(direction_4d).reshape(4, 4)
+    
+    # Create 4x4 identity matrix
+    direction_3d_matrix = direction_4d_matrix[:3, :3]
+    
+    # Return as flattened tuple
+    return tuple(direction_3d_matrix.flatten())
 
 def whiten_image(image):
     """
