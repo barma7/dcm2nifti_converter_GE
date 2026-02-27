@@ -1,8 +1,10 @@
 # GeneralEchoConverter Documentation
 
-## Overview
+## ℹ️ Note
 
-The `GeneralEchoConverter` is a flexible DICOM to NIfTI converter designed to handle multi-echo sequences that don't have specific converters. It automatically groups DICOM images by echo time and creates organized 4D NIfTI volumes with proper metadata.
+The converter is implemented as `GeneralSeriesConverter` in the code, but can be called using either `'general_echo'` or `'general_series'` as the sequence type.
+
+For complete documentation, see [GeneralSeriesConverter.md](GeneralSeriesConverter.md).
 
 ## Key Features
 
