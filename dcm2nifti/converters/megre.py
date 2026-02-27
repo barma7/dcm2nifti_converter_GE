@@ -127,12 +127,12 @@ class MEGREConverter(SequenceConverter):
             center_freq = [float(first_dicom.ImagingFrequency)]  # in MHz
             
             output_files = []
-            metadata = {
-                'sequence_type': 'MEGRE',
-                'complex_mode': complex,
-                'center_frequency': center_freq,
-                'slice_thickness': slice_thickness
-            }
+            metadata = self.create_standard_metadata(
+                first_dicom,
+                sequence_type='MEGRE',
+                complex_mode=complex,
+                center_frequency=center_freq
+            )
             
             if complex:
                 # Process complex data (real and imaginary components)
@@ -153,7 +153,9 @@ class MEGREConverter(SequenceConverter):
 
                 output_files.extend(result.output_files)
                 metadata.update(result.metadata)
-                metadata['processed_as'] = 'magnitude_only_mese'
+                metadata['sequence_type'] = 'MEGRE'
+                metadata['processed_as'] = 'magnitude_only_megre'
+                metadata['note'] = 'Processed using MESE converter (magnitude only)'
             
             # Save center frequency metadata
             center_freq_path = output_path / 'center_freq.txt'

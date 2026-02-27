@@ -4,7 +4,7 @@ Core orchestrator class for DICOM to NIfTI conversion.
 
 import logging
 from pathlib import Path
-from typing import Dict, Type, Union, Any, Optional
+from typing import Dict, Type, Union, Any, Optional, List
 
 from .base import SequenceConverter, ConversionResult
 from .converters import MESEConverter, DESSConverter, UTEConverter, UTESRConverter, IDEALConverter, MEGREConverter, GeneralSeriesConverter
@@ -174,16 +174,16 @@ class Dicom2NiftiConverter:
         
         self.logger.info(f"Registered converter for sequence type: {sequence_type}")
     
-    def batch_convert(self, conversions: list) -> Dict[str, ConversionResult]:
+    def batch_convert(self, conversions: List[Dict[str, Any]]) -> Dict[str, ConversionResult]:
         """
         Perform batch conversion of multiple sequences.
         
         Args:
             conversions: List of conversion dictionaries, each containing:
-                - sequence_type: str
-                - input_folder: str/Path
-                - output_folder: str/Path
-                - Any additional sequence-specific parameters
+                - sequence_type: str (required)
+                - input_folder: str or Path (required)
+                - output_folder: str or Path (required)
+                - Additional converter-specific parameters (optional)
                 
         Returns:
             Dictionary mapping conversion IDs to ConversionResults

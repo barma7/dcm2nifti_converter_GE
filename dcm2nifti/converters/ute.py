@@ -7,8 +7,6 @@ import numpy as np
 from pathlib import Path
 from typing import List, Union, Tuple, Any
 from os.path import join
-from copy import copy
-import pdb  # For debugging
 
 from ..base import SequenceConverter, ConversionResult
 from ..utils import (
@@ -65,7 +63,18 @@ class UTEConverter(SequenceConverter):
         """
         series_numbers = kwargs.get('series_numbers')
         if not series_numbers:
+            self.logger.error(
+                "UTE conversion requires 'series_numbers' parameter. "
+                "Multiple echo times should be acquired as separate series."
+            )
             raise ValueError("UTE conversion requires series_numbers parameter")
+        
+        if len(series_numbers) < 2:
+            self.logger.error(
+                f"UTE conversion requires at least 2 series (found {len(series_numbers)}). "
+                "Multiple echo times should be acquired as separate series."
+            )
+            raise ValueError(f"UTE requires at least 2 series, found {len(series_numbers)}")
         
         input_path = Path(input_folder)
         
@@ -112,7 +121,10 @@ class UTEConverter(SequenceConverter):
         coregister = kwargs.get('coregister', False)
         
         if not series_numbers:
-            raise ValueError("UTE conversion requires series_numbers parameter")
+            raise ValueError(
+                "UTE conversion requires 'series_numbers' parameter. "
+                "Example: series_numbers=['5', '6', '7'] for three echo times."
+            )
         
         # Create output directory
         output_path = self._create_output_directory(output_folder)
@@ -132,7 +144,7 @@ class UTEConverter(SequenceConverter):
         echo_times = []
         center_freqs = []
     
-        self.logger.info(f"Processing {len(series_numbers)} series without registration")
+        self.logger.info(f"Processing {len(series_numbers)} UTE series without registration")
         
         # Process each series
         for series_idx, series_number in enumerate(series_numbers):

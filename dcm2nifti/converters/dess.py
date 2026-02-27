@@ -73,6 +73,10 @@ class DESSConverter(SequenceConverter):
         analysis = analyze_dicom_series(dicom_files)
         
         if analysis['num_echoes'] != 2:
+            self.logger.error(
+                f"DESS sequences must have exactly 2 echoes. Found {analysis['num_echoes']}. "
+                "This converter only supports dual-echo DESS acquisitions."
+            )
             raise ValueError(f"DESS sequence requires exactly 2 echoes, found {analysis['num_echoes']}")
         
         self.logger.info(f"DESS validation successful: {analysis['num_echoes']} echoes, "
@@ -166,15 +170,16 @@ class DESSConverter(SequenceConverter):
             save_metadata(echo_times, echo_times_path)
             output_files.append(str(echo_times_path))
         
-        # Create metadata dictionary
-        metadata = {
-            'sequence_type': 'DESS',
-            'num_echoes': nb_echoes,
-            'num_slices': nb_slices,
-            'echo_times': echo_times,
-            'spacing': correct_spacing,
-            'slice_thickness': slice_thickness
-        }
+        # Create standardized metadata
+        metadata = self.create_standard_metadata(
+            dicom_files[0],
+            sequence_type='DESS',
+            num_echoes=nb_echoes,
+            num_slices=nb_slices,
+            echo_times=echo_times,
+            spacing=correct_spacing,
+            processed_as='dual_echo_steady_state'
+        )
         
         # Create conversion result
         result = ConversionResult(

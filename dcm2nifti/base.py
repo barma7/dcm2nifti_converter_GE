@@ -6,6 +6,22 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import logging
+import pydicom
+
+
+# Standard metadata keys for all converters
+METADATA_SCHEMA = {
+    'sequence_type': str,       # e.g., 'MESE', 'IDEAL', 'UTE', 'DESS'
+    'num_echoes': int,          # Number of echoes
+    'echo_times': list,         # List of echo times in ms
+    'repetition_time': float,   # TR in ms
+    'flip_angle': float,        # Degrees
+    'pixel_spacing': list,      # [x, y] in mm
+    'slice_thickness': float,   # mm
+    'processed_as': str,        # How the data was processed
+    'series_description': str,  # Original series description
+    'series_number': int,       # Series number
+}
 
 
 class SequenceConverter(ABC):
@@ -97,6 +113,41 @@ class SequenceConverter(ABC):
     def _log_conversion_complete(self, output_folder: Union[str, Path]):
         """Log the completion of conversion process."""
         self.logger.info(f"{self.sequence_name} conversion complete. Output saved to {output_folder}")
+    
+    def create_standard_metadata(self, dicom_file: Union[pydicom.Dataset, str], 
+                                 sequence_type: str,
+                                 **additional_fields) -> Dict[str, Any]:
+        """
+        Create standardized metadata dictionary.
+        
+        Args:
+            dicom_file: First DICOM file of the series (Dataset or path)
+            sequence_type: Type of sequence (MESE, IDEAL, UTE, etc.)
+            **additional_fields: Additional converter-specific metadata
+            
+        Returns:
+            Standardized metadata dictionary
+        """
+        # Load DICOM if it's a file path
+        if isinstance(dicom_file, str):
+            ds = pydicom.dcmread(dicom_file, stop_before_pixels=True)
+        else:
+            ds = dicom_file
+        
+        metadata = {
+            'sequence_type': sequence_type,
+            'series_description': str(ds.get('SeriesDescription', 'Unknown')),
+            'series_number': int(ds.get('SeriesNumber', 0)),
+            'repetition_time': float(ds.get('RepetitionTime', 0)),
+            'flip_angle': float(ds.get('FlipAngle', 0)),
+            'pixel_spacing': [float(x) for x in ds.get('PixelSpacing', [1.0, 1.0])],
+            'slice_thickness': float(ds.get('SliceThickness', 1.0)),
+        }
+        
+        # Add additional fields
+        metadata.update(additional_fields)
+        
+        return metadata
 
 
 class ConversionResult:

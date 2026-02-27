@@ -40,7 +40,7 @@ class MESEConverter(SequenceConverter):
     
     @property
     def optional_parameters(self) -> List[str]:
-        return []
+        return ["sort_by_position"]
     
     def validate_input(self, input_folder: Union[str, Path], **kwargs) -> bool:
         """
@@ -81,14 +81,16 @@ class MESEConverter(SequenceConverter):
         
         return True
     
-    def convert(self, input_folder: Union[str, Path], output_folder: Union[str, Path], **kwargs) -> ConversionResult:
+    def convert(self, input_folder: Union[str, Path], output_folder: Union[str, Path], 
+                sort_by_position: bool = True, **kwargs) -> ConversionResult:
         """
         Convert MESE DICOM series to NIfTI format.
         
         Args:
             input_folder: Path to folder containing DICOM files
             output_folder: Path to folder where outputs will be saved
-            **kwargs: Additional parameters (unused for MESE)
+            sort_by_position: Whether to sort slices by position (default: True)
+            **kwargs: Additional parameters
             
         Returns:
             ConversionResult containing converted images and metadata
@@ -123,7 +125,11 @@ class MESEConverter(SequenceConverter):
         for e in range(nb_echoes):
             # Get DICOM files for this echo
             echo_dicom_files = dicom_files[e::nb_echoes]
-            echo_dicom_files = sort_dicom_files_by_position(echo_dicom_files)
+            
+            if sort_by_position:
+                echo_dicom_files = sort_dicom_files_by_position(echo_dicom_files)
+            else:
+                self.logger.warning("Slices not sorted by position - using acquisition order")
             
             # Load DICOM series for this echo
             series_reader.SetFileNames(echo_dicom_files)
@@ -172,15 +178,16 @@ class MESEConverter(SequenceConverter):
         save_metadata([correct_spacing[0], correct_spacing[1], correct_spacing[2]], spacing_path)
         output_files.append(str(spacing_path))
         
-        # Create metadata dictionary
-        metadata = {
-            'sequence_type': 'MESE',
-            'num_echoes': nb_echoes,
-            'num_slices': nb_slices,
-            'echo_times': echo_times,
-            'spacing': correct_spacing,
-            'slice_thickness': slice_thickness
-        }
+        # Create standardized metadata
+        metadata = self.create_standard_metadata(
+            dicom_files[0],
+            sequence_type='MESE',
+            num_echoes=nb_echoes,
+            num_slices=nb_slices,
+            echo_times=echo_times,
+            spacing=correct_spacing,
+            processed_as='multi_echo_spin_echo'
+        )
         
         # Create conversion result
         result = ConversionResult(

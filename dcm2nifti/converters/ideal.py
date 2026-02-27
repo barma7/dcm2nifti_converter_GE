@@ -133,13 +133,13 @@ class IDEALConverter(SequenceConverter):
             center_freq = [float(first_dicom.ImagingFrequency)]  # in MHz
             
             output_files = []
-            metadata = {
-                'sequence_type': 'IDEAL',
-                'complex_mode': complex,
-                'invert': invert,
-                'center_frequency': center_freq,
-                'slice_thickness': slice_thickness
-            }
+            metadata = self.create_standard_metadata(
+                first_dicom,
+                sequence_type='IDEAL',
+                complex_mode=complex,
+                invert=invert,
+                center_frequency=center_freq
+            )
             
             if complex:
                 # Process complex data (real and imaginary components)
@@ -160,7 +160,9 @@ class IDEALConverter(SequenceConverter):
 
                 output_files.extend(result.output_files)
                 metadata.update(result.metadata)
-                metadata['processed_as'] = 'magnitude_only_mese'
+                metadata['sequence_type'] = 'IDEAL'
+                metadata['processed_as'] = 'magnitude_only_ideal'
+                metadata['note'] = 'Processed using MESE converter (magnitude only)'
             
             # Save center frequency metadata
             center_freq_path = output_path / 'center_freq.txt'
@@ -264,11 +266,39 @@ class IDEALConverter(SequenceConverter):
             # Reconstruct magnitude image from real and imaginary components
             self.logger.info("Reconstructing magnitude image")
             
-            real4d = nib.load(str(output_path / '4d_array_real.nii.gz'))
-            imag4d = nib.load(str(output_path / '4d_array_imag.nii.gz'))
+            real_path = output_path / '4d_array_real.nii.gz'
+            imag_path = output_path / '4d_array_imag.nii.gz'
+            
+            # Check if files exist
+            if not real_path.exists():
+                raise FileNotFoundError(
+                    f"Real component file not found: {real_path}. "
+                    "Cannot compute magnitude images."
+                )
+            if not imag_path.exists():
+                raise FileNotFoundError(
+                    f"Imaginary component file not found: {imag_path}. "
+                    "Cannot compute magnitude images."
+                )
+            
+            try:
+                real4d = nib.load(str(real_path))
+                imag4d = nib.load(str(imag_path))
+            except Exception as e:
+                raise IOError(f"Error loading complex component files: {e}")
+            
+            real_data = real4d.get_fdata()
+            imag_data = imag4d.get_fdata()
+            
+            # Verify dimensions match
+            if real_data.shape != imag_data.shape:
+                raise ValueError(
+                    f"Real and imaginary data shapes don't match: "
+                    f"{real_data.shape} vs {imag_data.shape}"
+                )
             
             # Calculate magnitude: sqrt(real^2 + imag^2)
-            mag4d_data = np.sqrt(real4d.get_fdata()**2 + imag4d.get_fdata()**2)
+            mag4d_data = np.sqrt(real_data**2 + imag_data**2)
             mag4d = nib.Nifti1Image(mag4d_data, real4d.affine)
             
             mag_output = output_path / '4d_array_mag.nii.gz'
