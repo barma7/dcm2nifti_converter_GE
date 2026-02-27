@@ -1,5 +1,5 @@
 # Core dependencies
-SimpleITK>=2.0.0
+simpleitk-simpleelastix>=2.5.0
 pydicom>=2.0.0
 nibabel>=3.0.0
 numpy>=1.19.0

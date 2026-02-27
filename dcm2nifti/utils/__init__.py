@@ -17,7 +17,8 @@ from .image_utils import (
     register_volumes,
     apply_transform,
     calculate_porosity_index,
-    calculate_saturation_recovery_index,
+    calculate_suppression_ratio_index,
+    wls_echo_subtraction_per_slice,
     calculate_complex_magnitude
 )
 
@@ -46,8 +47,9 @@ __all__ = [
     'register_volumes',
     'apply_transform',
     'calculate_porosity_index',
-    'calculate_saturation_recovery_index',
+    'calculate_suppression_ratio_index',
     'calculate_complex_magnitude',
+    'wls_echo_subtraction_per_slice',
     
     # file_utils
     'save_nifti_image',

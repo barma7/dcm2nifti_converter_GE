@@ -174,9 +174,10 @@ The refactored code includes:
 
 2. **Install dependencies** (if not already installed):
    ```bash
-   pip install SimpleITK pydicom nibabel numpy
-   ```
+pip install simpleitk-simpleelastix pydicom nibabel numpy
+```
 
+The `simpleitk-simpleelastix` package includes all SimpleITK functionality plus Elastix for image registration (used in UTE co-registration).
 3. **Test the package**:
    ```bash
    python -m dcm2nifti --list-sequences

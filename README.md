@@ -1,6 +1,6 @@
 # DCM2NIfTI Converter for GE MRI Sequences
 
-[![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A modular DICOM to NIfTI converter specifically designed for GE MRI sequences. This tool provides converters for different MRI sequence types with proper handling of multi-echo data, slice positioning, and metadata preservation.
@@ -29,7 +29,7 @@ A modular DICOM to NIfTI converter specifically designed for GE MRI sequences. T
 ## 📦 Installation
 
 ### Prerequisites
-- Python 3.7 or higher
+- Python 3.10 or higher
 - Required packages will be installed automatically
 
 ### Install from source
@@ -41,8 +41,10 @@ pip install -e .
 
 ### Manual installation
 ```bash
-pip install SimpleITK pydicom nibabel numpy pathlib
+pip install simpleitk-simpleelastix pydicom nibabel numpy pathlib
 ```
+
+**Note**: We use `simpleitk-simpleelastix>=2.5.0` instead of SimpleITK to support image registration via Elastix (required for UTE co-registration features).
 
 ## 🖥️ Usage
 
@@ -144,9 +146,9 @@ for conversion_id, result in results.items():
 #### Sequence Information
 
 ```python
-# Check available sequences
-available_sequences = converter.get_available_sequences()
-print(f"Available sequences: {list(available_sequences.keys())}")
+# List available sequences
+available_sequences = converter.list_supported_sequences()
+print(f"Available sequences: {available_sequences}")
 
 # Get parameters for a specific sequence type
 ute_params = converter.get_sequence_parameters('ute')
@@ -154,7 +156,7 @@ print(f"UTE required parameters: {ute_params['required']}")
 print(f"UTE optional parameters: {ute_params['optional']}")
 
 # Validate input before conversion
-is_valid = converter.validate(
+is_valid = converter.validate_conversion(
     sequence_type='mese',
     input_folder='/path/to/dicoms'
 )
@@ -277,7 +279,7 @@ def safe_convert(sequence_type: str, input_folder: str, output_folder: str, **kw
     
     # Validate input first
     try:
-        is_valid = converter.validate(sequence_type, input_folder, **kwargs)
+        is_valid = converter.validate_conversion(sequence_type, input_folder, **kwargs)
         if not is_valid:
             print(f"Validation failed for {sequence_type}")
             return None
@@ -346,11 +348,11 @@ Each conversion creates organized output with the following structure:
 ```
 output_folder/
 ├── 4d_array.nii.gz             # Main 4D output (multi-echo) or 3D (single echo)
-├── echo_01.nii.gz              # Individual echo (if save_echo_images=True)
-├── echo_02.nii.gz
+├── echo_1.nii.gz               # Individual echo (if save_echo_images=True)
+├── echo_2.nii.gz
 ├── echo_times.txt              # Echo times metadata
 ├── spacing_wo_gap.txt          # Voxel spacing
-└── conversion_metadata.txt      # Conversion parameters and info
+└── conversion_metadata.json     # Conversion parameters and info
 ```
 
 ### Metadata Dictionary Structure
@@ -616,7 +618,7 @@ results = converter.batch_convert(conversions)
 ## 📋 Requirements Summary
 
 - **Python 3.7+** - For type hints and modern syntax
-- **SimpleITK** - Medical image processing
+- **simpleitk-simpleelastix** - Medical image processing with Elastix registration
 - **pydicom** - DICOM file reading
 - **nibabel** - NIfTI file I/O
 - **numpy** - Numerical operations

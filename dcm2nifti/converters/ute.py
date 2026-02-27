@@ -21,6 +21,7 @@ from ..utils import (
     register_volumes,
     apply_transform,
     calculate_porosity_index,
+    wls_echo_subtraction_per_slice,
     save_nifti_image,
     save_metadata
 )
@@ -196,7 +197,7 @@ class UTEConverter(SequenceConverter):
         # Calculate Porosity Index if multiple echoes available
         output_files = []
         if len(echo_times_sorted) > 1:
-            self._calculate_and_save_porosity_index(echo_images_sorted, echo_times_sorted, output_path, output_files)
+            self._calculate_and_save_porosity_index_and_echo_subtraction(echo_images_sorted, echo_times_sorted, output_path, output_files)
         
         # Create 4D image
         direction_4d = create_4d_direction_matrix(echo_images_sorted[0].GetDirection())
@@ -222,12 +223,13 @@ class UTEConverter(SequenceConverter):
             'num_echoes': len(echo_times_sorted),
             'num_series': len(series_numbers),
             'echo_times': echo_times_sorted,
+            'image_sequences': "image_4d + echo_images_sorted" + ("+ PI + echo_subtraction" if len(echo_times_sorted) > 1 else ""),
             'center_frequency': center_freqs[0],
             'coregistered': False
         }
         
         result = ConversionResult(
-            images=[image_4d] + echo_images_sorted,
+            images=[image_4d] + echo_images_sorted + ([self.pi_image, self.echo_subtraction_image] if len(echo_times_sorted) > 1 else []),
             metadata=metadata,
             output_files=output_files,
             sequence_type='UTE'
@@ -333,11 +335,11 @@ class UTEConverter(SequenceConverter):
         echo_images_sorted = [all_echo_images[i] for i in sorted_indices]
         echo_times_sorted = [all_echo_times[i] for i in sorted_indices]
         
-        # Calculate Porosity Index if multiple echoes available
+        # Calculate Porosity Index and Echo Subtraction if multiple echoes available
         output_files = []
         if len(echo_times_sorted) > 1:
-            self._calculate_and_save_porosity_index(echo_images_sorted, echo_times_sorted, output_path, output_files)
-        
+            self._calculate_and_save_porosity_index_and_echo_subtraction(echo_images_sorted, echo_times_sorted, output_path, output_files)
+
         # Create 4D image
         direction_4d = create_4d_direction_matrix(echo_images_sorted[0].GetDirection())
         image_4d = sitk.JoinSeries(echo_images_sorted)
@@ -362,12 +364,13 @@ class UTEConverter(SequenceConverter):
             'num_echoes': len(echo_times_sorted),
             'num_series': len(series_numbers),
             'echo_times': echo_times_sorted,
+            'image_sequences': "image_4d + echo_images_sorted" + ("+ PI + echo_subtraction" if len(echo_times_sorted) > 1 else ""),
             'center_frequency': center_freqs[0],
             'coregistered': True
         }
         
         result = ConversionResult(
-            images=[image_4d] + echo_images_sorted,
+            images=[image_4d] + echo_images_sorted + ([self.pi_image, self.echo_subtraction_image] if len(echo_times_sorted) > 1 else []),
             metadata=metadata,
             output_files=output_files,
             sequence_type='UTE'
@@ -376,11 +379,11 @@ class UTEConverter(SequenceConverter):
         self._log_conversion_complete(output_path)
         return result
     
-    def _calculate_and_save_porosity_index(self, echo_images: List[sitk.Image], 
+    def _calculate_and_save_porosity_index_and_echo_subtraction(self, echo_images: List[sitk.Image], 
                                          echo_times: List[float],
                                          output_path: Path,
                                          output_files: List[str]) -> None:
-        """Calculate and save porosity index."""
+        """Calculate and save porosity index and echo subtraction."""
         self.logger.info(f"Calculating PI with {len(echo_images)} echo images")
         self.logger.info(f"Echo times: {echo_times}")
 
@@ -388,7 +391,7 @@ class UTEConverter(SequenceConverter):
         echo_time_2p2 = min(echo_times, key=lambda x: abs(x - 2.2))
         echo_time_2p2_idx = echo_times.index(echo_time_2p2)
         
-        self.logger.info(f"Using echo at {echo_time_2p2} ms (index {echo_time_2p2_idx}) for PI calculation")
+        self.logger.info(f"Using echo at {echo_time_2p2} ms (index {echo_time_2p2_idx}) for PI calculation and echo subtraction")
         
         # Get arrays
         echo_array_0 = sitk.GetArrayFromImage(echo_images[0])
@@ -399,8 +402,13 @@ class UTEConverter(SequenceConverter):
         
         # Calculate PI
         pi_array = calculate_porosity_index(echo_array_0, echo_array_2p2, 0, 100)
+        echo_subtraction_array, _ = wls_echo_subtraction_per_slice(echo_array_0, echo_array_2p2,
+                                                                        kernel_size=(13, 13),
+                                                                        eps=1e-8,
+                                                                        clamp=(-1, 1))
         
         self.logger.info(f"PI array shape: {pi_array.shape}, range: [{pi_array.min():.2f}, {pi_array.max():.2f}]")
+        self.logger.info(f"Echo subtraction array shape: {echo_subtraction_array.shape}, range: [{echo_subtraction_array.min():.2f}, {echo_subtraction_array.max():.2f}]")
         
         # Create image and save
         pi_image = sitk_image_from_array(pi_array, echo_images[0].GetSpacing(), echo_images[0])
@@ -408,4 +416,14 @@ class UTEConverter(SequenceConverter):
         save_nifti_image(pi_image, pi_path)
         output_files.append(str(pi_path))
         
-        self.logger.info(f"Calculated and saved Porosity Index using echo at {echo_time_2p2} ms")
+        echo_subtraction_image = sitk_image_from_array(echo_subtraction_array, echo_images[0].GetSpacing(), echo_images[0])
+        echo_subtraction_path = output_path / 'echo_subtraction.nii.gz'
+        save_nifti_image(echo_subtraction_image, echo_subtraction_path)
+        output_files.append(str(echo_subtraction_path))
+
+        self.pi_image = pi_image
+        self.echo_subtraction_image = echo_subtraction_image
+        
+        self.logger.info(f"Calculated and saved Porosity Index and Echo Subtraction using echo at {echo_time_2p2} ms")
+
+

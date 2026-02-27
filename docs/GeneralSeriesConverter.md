@@ -172,7 +172,7 @@ output_folder/
 ├── echo_03.nii.gz
 ├── echo_times.txt               # List of echo times in ms
 ├── spacing_wo_gap.txt           # Voxel spacing (x, y, z)
-└── conversion_metadata.txt      # Conversion details and parameters
+└── conversion_metadata.json      # Conversion details and parameters
 ```
 
 ### File Descriptions
@@ -202,9 +202,10 @@ output_folder/
    - Voxel dimensions: [x_mm, y_mm, z_mm]
    - Useful for scaling in analysis
 
-5. **Metadata** (`conversion_metadata.txt`)
+5. **Metadata** (`conversion_metadata.json`)
    - Records what was converted
-   - Useful for reproducibility
+   - JSON format with conversion parameters and results
+   - Useful for reproducibility and tracking
 
 ## Metadata Dictionary
 
@@ -212,7 +213,7 @@ The `result.metadata` includes:
 
 ```python
 {
-    'sequence_type': 'GENERAL_MULTI_ECHO',
+    'sequence_type': 'GENERAL_SERIES',
     'series_description': 'T2_Map',
     'series_number': 5,
     'num_echoes': 4,
@@ -220,7 +221,7 @@ The `result.metadata` includes:
     'num_slices': 32,
     'spacing': (0.5, 0.5, 2.0),              # x, y, z in mm
     'slice_thickness': 2.0,
-    'processed_as': 'general_multi_echo',
+    'processed_as': 'general_series',
     'repetition_time': 2000,                 # in ms
     'flip_angle': 90.0,
     'pixel_spacing': [0.5, 0.5]             # in-plane resolution
@@ -386,73 +387,53 @@ t2_map = t2_mapping_pipeline('/dicoms', '/output')
 # Basic conversion
 python -m dcm2nifti /path/to/dicoms /path/to/output general_echo
 
-# Only process multi-echo sequences (2+ echoes)
-python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --min_echoes 2
+# With spatial position sorting (default)
+python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --sort_by_position
 
-# Process all echoes together
-python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --no_group_by_series
-
-# Combination of options
-python -m dcm2nifti /path/to/dicoms /path/to/output general_echo \
-    --min_echoes 3 --no_group_by_series --verbose
+# Without spatial position sorting
+python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --no_sort_by_position
 ```
 
 ## Output Structure
 
-### With Series Grouping (default)
 ```
 output_folder/
-├── conversion_metadata.txt          # Overall conversion metadata
-├── series_123/                      # First series group
-│   ├── echo_01_TE_5.00ms.nii.gz    # Individual echo files
-│   ├── echo_02_TE_10.00ms.nii.gz
-│   ├── echo_03_TE_15.00ms.nii.gz
-│   ├── 4d_multiecho.nii.gz         # 4D volume (if >1 echo)
-│   └── echo_times.txt               # Echo time metadata
-└── series_456/                      # Second series group
-    ├── echo_01_TE_2.50ms.nii.gz
-    ├── echo_02_TE_7.50ms.nii.gz
-    ├── 4d_multiecho.nii.gz
-    └── echo_times.txt
-```
-
-### Without Series Grouping
-```
-output_folder/
-├── conversion_metadata.txt
-└── all/                             # All echoes processed together
-    ├── echo_01_TE_2.50ms.nii.gz
-    ├── echo_02_TE_5.00ms.nii.gz
-    ├── echo_03_TE_7.50ms.nii.gz
-    ├── echo_04_TE_10.00ms.nii.gz
-    ├── echo_05_TE_15.00ms.nii.gz
-    ├── 4d_multiecho.nii.gz
-    └── echo_times.txt
+├── 4d_array.nii.gz              # Main 4D output (multi-echo) or 3D (single echo)
+├── echo_1.nii.gz                # Individual echo files (one per echo time)
+├── echo_2.nii.gz
+├── echo_3.nii.gz
+├── echo_times.txt               # Echo times in milliseconds
+├── spacing_wo_gap.txt           # Voxel spacing information
+└── conversion_metadata.json     # Conversion parameters and metadata
 ```
 
 ## File Descriptions
 
 ### Output Files
 
-1. **Individual Echo Files** (`echo_XX_TE_YYms.nii.gz`)
+1. **Main 4D/3D Volume** (`4d_array.nii.gz`)
+   - 4D NIfTI file for multi-echo data (echoes in 4th dimension)
+   - 3D NIfTI file for single echo data
+   - Proper direction matrices for spatial transformations
+
+2. **Individual Echo Files** (`echo_1.nii.gz`, `echo_2.nii.gz`, ...)
    - 3D NIfTI files for each echo time
-   - Numbered sequentially with echo time in filename
+   - Numbered sequentially starting from 1
    - Float32 data type for consistent processing
 
-2. **4D Multi-echo Volume** (`4d_multiecho.nii.gz`)
-   - Created when multiple echoes are present
-   - 4th dimension represents echo time
-   - Proper 4D direction matrix for spatial transformations
-
 3. **Echo Times Metadata** (`echo_times.txt`)
-   - List of echo times in milliseconds
-   - Ordered to match 4D volume structure
-   - Used for further processing and analysis
+   - List of echo times in milliseconds, one per line
+   - Ordered to match the 4th dimension of 4d_array.nii.gz
+   - Used for further analysis and processing
 
-4. **Conversion Metadata** (`conversion_metadata.txt`)
-   - Overall conversion parameters and results
-   - Group information and processing statistics
+4. **Spacing Information** (`spacing_wo_gap.txt`)
+   - Voxel spacing in x, y, z dimensions
+   - In millimeters
+
+5. **Conversion Metadata** (`conversion_metadata.json`)
+   - JSON file with conversion parameters and statistics
    - Useful for reproducibility and documentation
+   - Includes echo detection results and processing parameters
 
 ### Metadata Structure
 
@@ -460,22 +441,15 @@ The converter provides comprehensive metadata including:
 
 ```python
 metadata = {
-    'sequence_type': 'GENERAL_ECHO',
-    'min_echoes': 2,
-    'group_by_series': True,
+    'sequence_type': 'GENERAL_SERIES',
     'sort_by_position': True,
-    'num_groups': 2,
-    'groups': {
-        'group_series_123': {
-            'num_echoes': 3,
-            'echo_times': [5.0, 10.0, 15.0],
-            'echo_time_range': [5.0, 15.0],
-            'slice_thickness': 3.0,
-            'center_frequency': 127.766,
-            'files_per_echo': {'5.00': 24, '10.00': 24, '15.00': 24},
-            'image_size': [256, 256, 24],
-            'spacing': [0.9375, 0.9375, 3.0]
-        }
+    'echo_data': {
+        'num_echoes': 3,
+        'echo_times': [5.0, 10.0, 15.0],
+        'num_slices': 24,
+        'image_size': [256, 256, 24],
+        'spacing': [0.9375, 0.9375, 3.0],
+        'slice_thickness': 3.0
     }
 }
 ```
@@ -531,26 +505,26 @@ The `GeneralEchoConverter` is designed to complement specific sequence converter
 
 ## Best Practices
 
-1. **Data Organization**: Organize DICOM files by series before conversion
-2. **Echo Validation**: Use `min_echoes` to filter incomplete acquisitions
-3. **Quality Control**: Review `conversion_metadata.txt` for processing summary
-4. **Storage Planning**: Consider disk space for both 3D and 4D outputs
-5. **Documentation**: Save conversion parameters for reproducibility
+1. **Data Organization**: Keep DICOM files organized in a single folder (doesn't need series separation)
+2. **Quality Control**: Review `conversion_metadata.json` for echo detection results
+3. **Storage Planning**: Consider disk space for both individual echoes and 4D volumes
+4. **Documentation**: Save conversion parameters for reproducibility
+5. **Spatial Sorting**: Use default `sort_by_position=True` for proper anatomical alignment
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **No echoes found**: Check DICOM files have valid `EchoTime` tags
-2. **Empty output**: Verify `min_echoes` threshold is appropriate
-3. **Missing series**: Check if `group_by_series=False` is needed
+2. **Incorrect echo grouping**: Verify all echoes in the folder have the same series number when expected
+3. **Spatial misalignment**: Try enabling `sort_by_position=True` (default) for proper slice ordering
 4. **Memory errors**: Process smaller datasets or increase available RAM
-5. **Spatial misalignment**: Enable `sort_by_position` for proper ordering
+5. **Missing output files**: Verify the DICOM files are valid and readable
 
 ### Debugging Tips
 
-1. Use `--verbose` flag for detailed processing logs
-2. Check `conversion_metadata.txt` for group statistics
-3. Verify input DICOM tags with DICOM viewers
-4. Test with `--validate-only` flag first
-5. Compare echo times in output metadata files
+1. Use logging to see detailed processing information
+2. Check `conversion_metadata.json` to verify echo detection results
+3. Verify input DICOM tags with DICOM viewer tools
+4. Test with a small subset of data first
+5. Compare generated echo times with expected values from DICOM headers

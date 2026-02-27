@@ -11,7 +11,10 @@ from os.path import join
 from ..base import SequenceConverter, ConversionResult
 from ..utils import (
     save_nifti_image,
-    sitk_image_from_array
+    sitk_image_from_array,
+    whiten_image,
+    register_volumes,
+    apply_transform,
 )
 from .ute import UTEConverter
 
@@ -38,7 +41,7 @@ class UTESRConverter(SequenceConverter):
     
     @property
     def optional_parameters(self) -> List[str]:
-        return []
+        return ["coregister"]
     
     def validate_input(self, input_folder: Union[str, Path], **kwargs) -> bool:
         """
@@ -103,6 +106,9 @@ class UTESRConverter(SequenceConverter):
             
             self.logger.info(f"Converting UTE_SR sequence with series {series_numbers}")
             
+            # Get parameters
+            coregister = kwargs.get('coregister', False)
+
             # Create lists for individual series
             series_numbers_uTE = [series_numbers[0]] 
             series_numbers_IRuTE = [series_numbers[1]]
@@ -119,7 +125,7 @@ class UTESRConverter(SequenceConverter):
             ute_result = self.ute_converter.convert(
                 input_folder, str(output_folder_uTE), series_numbers=series_numbers_uTE, coregister=False
             )
-            
+
             self.logger.info("Converting IR-UTE series...")
             irute_result = self.ute_converter.convert(
                 input_folder, str(output_folder_IRuTE), series_numbers=series_numbers_IRuTE, coregister=False
@@ -132,10 +138,56 @@ class UTESRConverter(SequenceConverter):
             
             if not echo_images_uTE or not echo_images_IRuTE:
                 raise ValueError("Failed to extract echo images from UTE conversions")
-            
-            # Extract arrays from the first echo of each series
-            echo_array_uTE = sitk.GetArrayFromImage(echo_images_uTE[0])
-            echo_array_IRuTE = sitk.GetArrayFromImage(echo_images_IRuTE[0])
+
+            if coregister:
+                # coregister echo_images_uTE to echo_images_IRuTE 
+                # we will use the last echo_images_uTE as moving image and the first echo_images_IRuTE as fixed image for registration
+                # then we will apply the same transform to all echo_images_uTE
+                self.logger.info("Coregistering UTE echoes to IR-UTE echoes...")
+
+                # Create temporary folder for registration
+                temp_folder = output_path / 'elastix_tmp'
+                temp_folder.mkdir(parents=True, exist_ok=True)
+
+                target_image = echo_images_IRuTE[0]
+                moving_image = echo_images_uTE[1]
+                
+                _, transform = register_volumes(target_image, moving_image, temp_folder, rigid=True)
+                
+                # Apply transform to all echoes in this series
+                registered_uTE_images = []
+                for j, image in enumerate(echo_images_uTE):
+                    transformed_image = apply_transform(image, transform, temp_folder, target_image)
+                    # Ensure consistent spatial properties
+                    transformed_image.SetOrigin(target_image.GetOrigin())
+                    transformed_image.SetSpacing(target_image.GetSpacing())
+                    transformed_image.SetDirection(target_image.GetDirection())
+                    registered_uTE_images.append(transformed_image)
+                
+                # save registered images to output folder
+                # extract image_name from ute_resutls.metadata.image_sequences which is in the format "image_4d + echo_images_sorted + PI and echo subtraction"
+                image_sequences = ute_result.metadata.get('image_sequences', '')
+
+                # create list of image names for registered images separated by " + " and extract the names that contain "echo_images_sorted"
+                image_names = [name.strip() for name in image_sequences.split('+')]
+                image_names = image_names[1:]  # skip the first one which is image_4d
+                                    
+                for j, image in enumerate(registered_uTE_images):
+                    if j < len(registered_uTE_images) - 2:
+                        image_name = f"registered_echo_{j}"
+                    else:
+                        if j == len(registered_uTE_images) - 2:
+                            image_name = "PI_image_registered"   
+                        else:
+                            image_name = "echo_subtraction_image_registered"
+                    registered_image_path = output_folder_IRuTE / f'{image_name}.nii.gz'
+                    save_nifti_image(image, str(registered_image_path))
+                
+                # Extract arrays from the first echo of each series
+                echo_array_uTE = sitk.GetArrayFromImage(registered_uTE_images[0])
+            else:
+                echo_array_uTE = sitk.GetArrayFromImage(echo_images_uTE[0])
+                echo_array_IRuTE = sitk.GetArrayFromImage(echo_images_IRuTE[0])
             
             # Create SR index array by taking the ratio of uTE and IRuTE
             # Avoid division by zero by adding small epsilon

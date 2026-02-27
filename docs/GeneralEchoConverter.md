@@ -1,243 +1,66 @@
 # GeneralEchoConverter Documentation
 
-## ℹ️ Note
+## Quick Note
 
-The converter is implemented as `GeneralSeriesConverter` in the code, but can be called using either `'general_echo'` or `'general_series'` as the sequence type.
+The converter is implemented as `GeneralSeriesConverter` in the code, but is called using `'general_echo'` as the sequence type.
 
-For complete documentation, see [GeneralSeriesConverter.md](GeneralSeriesConverter.md).
+**For complete documentation, see [GeneralSeriesConverter.md](GeneralSeriesConverter.md).**
 
-## Key Features
-
-- **Automatic Echo Grouping**: Groups DICOM files by echo time values
-- **Series-based Organization**: Can group by series number for complex datasets
-- **4D Volume Creation**: Automatically creates 4D NIfTI volumes for multi-echo data
-- **Flexible Filtering**: Filter groups by minimum echo count
-- **Comprehensive Metadata**: Saves detailed echo time and conversion metadata
-- **Position Sorting**: Optional spatial position sorting for consistent slice ordering
-
-## Use Cases
-
-1. **Research Sequences**: Custom multi-echo sequences without specific converters
-2. **Data Exploration**: Quick overview of echo structure in unknown datasets
-3. **Quality Control**: Validation of multi-echo acquisitions
-4. **Variable Echo Times**: Sequences with non-standard echo time patterns
-5. **Mixed Datasets**: Processing datasets with multiple sequence types
-
-## Parameters
-
-### Required Parameters
-- `input_folder`: Path to folder containing DICOM files
-- `output_folder`: Path to output directory
-
-### Optional Parameters
-- `min_echoes` (default: 1): Minimum number of echoes required to process a group
-- `group_by_series` (default: True): Whether to group by series number first
-- `sort_by_position` (default: True): Whether to sort files by spatial position
-
-## Usage Examples
-
-### Python API
+## Quick Start
 
 ```python
 from dcm2nifti import Dicom2NiftiConverter
 
 converter = Dicom2NiftiConverter()
 
-# Basic multi-echo conversion
-result = converter.convert(
-    sequence_type='general_echo',
-    input_folder='/path/to/dicoms',
-    output_folder='/path/to/output'
-)
-
-# Only process sequences with multiple echoes
+# Convert multi-echo sequence
 result = converter.convert(
     sequence_type='general_echo',
     input_folder='/path/to/dicoms',
     output_folder='/path/to/output',
-    min_echoes=2
-)
-
-# Process all echoes together (no series grouping)
-result = converter.convert(
-    sequence_type='general_echo',
-    input_folder='/path/to/dicoms',
-    output_folder='/path/to/output',
-    group_by_series=False
+    sort_by_position=True  # Optional: sort slices by spatial position
 )
 ```
 
-### Command Line Interface
+## Key Features
 
-```bash
-# Basic conversion
-python -m dcm2nifti /path/to/dicoms /path/to/output general_echo
+- **Automatic Echo Detection**: Groups DICOM files by echo time values
+- **4D Volume Creation**: Creates 4D NIfTI volumes for multi-echo data
+- **Position Sorting**: Optional spatial position sorting for proper slice ordering
+- **Standardized Metadata**: Saves detailed echo time and conversion metadata
+- **Flexible**: Works with any number of echoes (1, 2, 3, 4+)
 
-# Only process multi-echo sequences (2+ echoes)
-python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --min_echoes 2
+## Parameters
 
-# Process all echoes together
-python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --no_group_by_series
+### Required
+- `input_folder`: Path to folder containing DICOM files
+- `output_folder`: Path to output directory
 
-# Combination of options
-python -m dcm2nifti /path/to/dicoms /path/to/output general_echo \
-    --min_echoes 3 --no_group_by_series --verbose
-```
+### Optional
+- `sort_by_position` (default: True): Sort files by spatial position
 
-## Output Structure
+## Output
 
-### With Series Grouping (default)
-```
-output_folder/
-├── conversion_metadata.txt          # Overall conversion metadata
-├── series_123/                      # First series group
-│   ├── echo_01_TE_5.00ms.nii.gz    # Individual echo files
-│   ├── echo_02_TE_10.00ms.nii.gz
-│   ├── echo_03_TE_15.00ms.nii.gz
-│   ├── 4d_multiecho.nii.gz         # 4D volume (if >1 echo)
-│   └── echo_times.txt               # Echo time metadata
-└── series_456/                      # Second series group
-    ├── echo_01_TE_2.50ms.nii.gz
-    ├── echo_02_TE_7.50ms.nii.gz
-    ├── 4d_multiecho.nii.gz
-    └── echo_times.txt
-```
+Each conversion creates:
+- `4d_array.nii.gz` - Main output (4D for multi-echo, 3D for single echo)
+- `echo_1.nii.gz`, `echo_2.nii.gz`, etc. - Individual echo files
+- `echo_times.txt` - Echo times in milliseconds
+- `spacing_wo_gap.txt` - Voxel spacing information
+- `conversion_metadata.json` - Conversion parameters and metadata
 
-### Without Series Grouping
-```
-output_folder/
-├── conversion_metadata.txt
-└── all/                             # All echoes processed together
-    ├── echo_01_TE_2.50ms.nii.gz
-    ├── echo_02_TE_5.00ms.nii.gz
-    ├── echo_03_TE_7.50ms.nii.gz
-    ├── echo_04_TE_10.00ms.nii.gz
-    ├── echo_05_TE_15.00ms.nii.gz
-    ├── 4d_multiecho.nii.gz
-    └── echo_times.txt
-```
+## Use Cases
 
-## File Descriptions
+- Custom/research multi-echo sequences
+- Quick exploration of unknown echo structure
+- Batch processing diverse sequences
+- When specific sequence converters aren't available
 
-### Output Files
+## More Information
 
-1. **Individual Echo Files** (`echo_XX_TE_YYms.nii.gz`)
-   - 3D NIfTI files for each echo time
-   - Numbered sequentially with echo time in filename
-   - Float32 data type for consistent processing
-
-2. **4D Multi-echo Volume** (`4d_multiecho.nii.gz`)
-   - Created when multiple echoes are present
-   - 4th dimension represents echo time
-   - Proper 4D direction matrix for spatial transformations
-
-3. **Echo Times Metadata** (`echo_times.txt`)
-   - List of echo times in milliseconds
-   - Ordered to match 4D volume structure
-   - Used for further processing and analysis
-
-4. **Conversion Metadata** (`conversion_metadata.txt`)
-   - Overall conversion parameters and results
-   - Group information and processing statistics
-   - Useful for reproducibility and documentation
-
-### Metadata Structure
-
-The converter provides comprehensive metadata including:
-
-```python
-metadata = {
-    'sequence_type': 'GENERAL_ECHO',
-    'min_echoes': 2,
-    'group_by_series': True,
-    'sort_by_position': True,
-    'num_groups': 2,
-    'groups': {
-        'group_series_123': {
-            'num_echoes': 3,
-            'echo_times': [5.0, 10.0, 15.0],
-            'echo_time_range': [5.0, 15.0],
-            'slice_thickness': 3.0,
-            'center_frequency': 127.766,
-            'files_per_echo': {'5.00': 24, '10.00': 24, '15.00': 24},
-            'image_size': [256, 256, 24],
-            'spacing': [0.9375, 0.9375, 3.0]
-        }
-    }
-}
-```
-
-## Technical Details
-
-### Echo Time Detection
-- Reads `EchoTime` DICOM tag (0018,0081)
-- Falls back to 0.0 if tag is missing
-- Groups files with identical echo times
-
-### Series Grouping
-- Uses `SeriesNumber` DICOM tag (0020,0011)
-- Creates separate groups for each series
-- Falls back to 'unknown' if tag is missing
-
-### Spatial Positioning
-- Uses existing `sort_dicom_files_by_position` utility
-- Sorts by `ImagePositionPatient` and `InstanceNumber`
-- Ensures consistent slice ordering
-
-### Image Processing
-- Converts all images to Float32 format
-- Maintains original spacing and orientation
-- Corrects slice thickness when necessary
-- Creates proper 4D direction matrices
-
-## Error Handling
-
-The converter handles various error conditions:
-
-1. **Missing DICOM Files**: Validates input folder contains DICOM files
-2. **Invalid Echo Times**: Skips files with missing or invalid echo time tags
-3. **Insufficient Echoes**: Filters groups below minimum echo threshold
-4. **File Processing Errors**: Logs warnings and continues with valid files
-5. **Series Reading Errors**: Gracefully handles corrupted or incompatible files
-
-## Performance Considerations
-
-- **Memory Usage**: Loads one echo at a time to manage memory
-- **Disk I/O**: Minimizes file reads by grouping operations
-- **Processing Time**: Scales linearly with number of echoes and files
-- **Storage**: Creates both individual and 4D volumes for flexibility
-
-## Integration with Other Converters
-
-The `GeneralEchoConverter` is designed to complement specific sequence converters:
-
-- Use **MESE** for standard multi-echo spin echo sequences
-- Use **IDEAL** for water/fat separation sequences
-- Use **UTE** for ultra-short echo time sequences
-- Use **GeneralEcho** for research or unknown multi-echo sequences
-
-## Best Practices
-
-1. **Data Organization**: Organize DICOM files by series before conversion
-2. **Echo Validation**: Use `min_echoes` to filter incomplete acquisitions
-3. **Quality Control**: Review `conversion_metadata.txt` for processing summary
-4. **Storage Planning**: Consider disk space for both 3D and 4D outputs
-5. **Documentation**: Save conversion parameters for reproducibility
-
-## Troubleshooting
-
-### Common Issues
-
-1. **No echoes found**: Check DICOM files have valid `EchoTime` tags
-2. **Empty output**: Verify `min_echoes` threshold is appropriate
-3. **Missing series**: Check if `group_by_series=False` is needed
-4. **Memory errors**: Process smaller datasets or increase available RAM
-5. **Spatial misalignment**: Enable `sort_by_position` for proper ordering
-
-### Debugging Tips
-
-1. Use `--verbose` flag for detailed processing logs
-2. Check `conversion_metadata.txt` for group statistics
-3. Verify input DICOM tags with DICOM viewers
-4. Test with `--validate-only` flag first
-5. Compare echo times in output metadata files
+See [GeneralSeriesConverter.md](GeneralSeriesConverter.md) for:
+- Detailed usage examples
+- Python API patterns
+- CLI usage
+- Metadata dictionary structure
+- Technical details
+- Error handling and troubleshooting

@@ -5,19 +5,19 @@ Setup script for dcm2nifti package.
 from setuptools import setup, find_packages
 from pathlib import Path
 
-# Read the README file
+# Read the README file with UTF-8 encoding
 this_directory = Path(__file__).parent
-long_description = (this_directory / "README.md").read_text() if (this_directory / "README.md").exists() else ""
+long_description = (this_directory / "README.md").read_text(encoding="utf-8") if (this_directory / "README.md").exists() else ""
 
 setup(
-    name="dcm2nifti-refactored",
+    name="dcm2nifti_converter_GE",
     version="2.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
-    description="A modular DICOM to NIfTI converter for various MRI sequences",
+    author="Marco Barbieri",
+    author_email="",
+    description="A modular DICOM to NIfTI converter for various GE MRI sequences",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/dcm2nifti-refactored",
+    url="https://github.com/barma7/dcm2nifti_converter_GE",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -25,16 +25,14 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
-        "Topic :: Scientific/Engineering :: Image Recognition",
+        "Topic :: Scientific/Engineering :: Image Analysis",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=[
-        "SimpleITK>=2.0.0",
+        "simpleitk-simpleelastix>=2.5.0",
         "pydicom>=2.0.0",
         "nibabel>=3.0.0",
         "numpy>=1.19.0",

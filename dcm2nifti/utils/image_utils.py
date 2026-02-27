@@ -317,7 +317,7 @@ def register_volumes(target: sitk.Image,
         selx.LogToFileOff()
 
         # Specify the output directory
-        selx.SetOutputDirectory(out_path)
+        selx.SetOutputDirectory(str(out_path))
         selx.LogToConsoleOn()
         selx.LogToFileOn()
         # Execute registration
@@ -372,7 +372,7 @@ def apply_transform(moving: sitk.Image,
         transformix_filter.SetTransformParameterMap(transform_parameter_map)
 
         transformix_filter.SetMovingImage(moving)
-        transformix_filter.SetOutputDirectory(out_path)
+        transformix_filter.SetOutputDirectory(str(out_path))
 
         # Set the log level to OFF
         transformix_filter.LogToConsoleOff()
@@ -417,13 +417,133 @@ def calculate_porosity_index(echo_1_array: np.ndarray,
     
     return pi
 
+def _hann2d_kernel(kernel_size):
+    """2D separable Hann kernel with unit sum."""
+    if isinstance(kernel_size, int):
+        ky = kx = kernel_size
+    else:
+        ky, kx = kernel_size
+    wy = np.hanning(int(ky)).astype(np.float64)
+    wx = np.hanning(int(kx)).astype(np.float64)
+    ker = np.outer(wy, wx)
+    s = ker.sum()
+    if s <= 0:
+        raise ValueError("Hann kernel sum is non-positive; use kernel_size >= 3.")
+    return ker / s
 
-def calculate_saturation_recovery_index(ute_array: np.ndarray, 
+def _fft_convolve2d_same(x, k):
+    """2D FFT convolution, same output size as x."""
+    x = np.asarray(x, dtype=np.float64)
+    k = np.asarray(k, dtype=np.float64)
+    if x.ndim != 2 or k.ndim != 2:
+        raise ValueError("x and k must be 2D arrays.")
+
+    H, W = x.shape
+    kh, kw = k.shape
+
+    kpad = np.zeros((H, W), dtype=np.float64)
+    kpad[:kh, :kw] = k
+
+    # shift kernel center to (0,0)
+    kpad = np.roll(kpad, shift=(-(kh // 2), -(kw // 2)), axis=(0, 1))
+
+    X = np.fft.fft2(x)
+    K = np.fft.fft2(kpad)
+    y = np.fft.ifft2(X * K).real
+    return y
+
+def wls_echo_subtraction_per_slice(
+    x_ute,
+    x_cte,
+    kernel_size=(11, 11),
+    weight_normalize=True,
+    eps=1e-8,
+    clamp=(-1.0, 1.0),
+):
+    """
+    Per-slice implementation of the method in the snapshot, without regularization and without CG.
+
+    Steps (per slice):
+      u = |UTE|, c = |CTE|
+      a = u + c
+      b = u - c
+      W = conv2(|b|, Hann2D)
+      xs = (a*b) / (a^2 + eps)   # stabilized normalized subtraction
+
+    Parameters
+    ----------
+    x_ute, x_cte : array_like
+        3D volumes, shape (Ny, Nx, Nz) or (Nz, Ny, Nx).
+        They must have identical shape. Complex or real are both fine.
+    kernel_size : int or (ky, kx)
+        2D Hann window size in pixels for weighting per slice.
+        Recommended start for 2 mm in-plane: (11, 11) or (13, 13).
+    weight_normalize : bool
+        Normalize each slice's W to [0,1] by dividing by max(W)+eps.
+    eps : float
+        Stabilizer to avoid division blow-ups where a ~ 0 (air/background).
+    clamp : tuple or None
+        Optional clipping of xs (default clamps to [-1, 1], consistent with normalized difference range).
+        Set to None to disable.
+
+    Returns
+    -------
+    xs : np.ndarray
+        Bone-specific image, float64, same shape as input.
+    W : np.ndarray
+        Weight map, float64, same shape as input.
+    """
+    x_ute = np.asarray(x_ute)
+    x_cte = np.asarray(x_cte)
+    if x_ute.shape != x_cte.shape:
+        raise ValueError(f"Shape mismatch: {x_ute.shape} vs {x_cte.shape}")
+
+    # Decide slicing axis: assume last axis is slices if it's small
+    # If your data is (Nz, Ny, Nx) just transpose before calling or adapt here.
+    if x_ute.ndim != 3:
+        raise ValueError("Expected 3D volumes.")
+
+    Nz, Nx, Ny = x_ute.shape  # assumes (Z, X, Y) as commonly loaded by sitk.GetArrayFromImage; adjust if your data is (Y, X, Z)
+    ker = _hann2d_kernel(kernel_size)
+
+    xs = np.zeros((Nz,Nx, Ny), dtype=np.float64)
+    Wout = np.zeros((Nz, Nx, Ny), dtype=np.float64)
+
+    u = np.abs(x_ute).astype(np.float64)
+    c = np.abs(x_cte).astype(np.float64)
+    a = u + c
+    b = u - c
+
+    for z in range(Nz):
+        b_abs = np.abs(b[z, :, :])
+        W = _fft_convolve2d_same(b_abs, ker)
+        W = np.clip(W, 0.0, None)
+
+        if weight_normalize:
+            W = W / (W.max() + eps)
+
+        # Stabilized normalized subtraction (robust in air/background)
+        az = a[z, :, :]
+        bz = b[z, :, :]
+        xs_z = (az * bz) / (az * az + eps)
+
+        if clamp is not None:
+            xs_z = np.clip(xs_z, clamp[0], clamp[1])
+
+        xs[z, :, :] = xs_z
+        Wout[z, :, :] = W
+
+    return xs, Wout
+
+
+import numpy as np
+
+def calculate_suppression_ratio_index(ute_array: np.ndarray, 
                                       ir_ute_array: np.ndarray,
                                       clip_min: float = 0.0,
                                       clip_max: float = 1000.0) -> np.ndarray:
     """
-    Calculate saturation recovery index from UTE and IR-UTE images.
+    Calculate suppression ratio index from UTE and IR-UTE images.
     
     Args:
         ute_array: UTE image array
@@ -432,7 +552,7 @@ def calculate_saturation_recovery_index(ute_array: np.ndarray,
         clip_max: Maximum value for clipping
         
     Returns:
-        Saturation recovery index array
+        Suppression ratio index array
     """
     # Avoid division by zero
     with np.errstate(divide='ignore', invalid='ignore'):

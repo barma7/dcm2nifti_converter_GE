@@ -28,51 +28,45 @@ def example_general_echo_conversion():
             input_folder='/path/to/multiecho/dicoms',
             output_folder='/path/to/output',
             # Optional parameters with defaults:
-            min_echoes=1,              # Minimum echoes required
-            group_by_series=True,      # Group by series number
             sort_by_position=True      # Sort by spatial position
         )
         print(f"✓ Conversion successful!")
         print(f"Generated files: {len(result.output_files)}")
-        print(f"Number of groups processed: {result.metadata['num_groups']}")
+        print(f"Echo times: {result.metadata.get('echo_times', [])}")
         
     except Exception as e:
         print(f"✗ Conversion failed: {e}")
     
     print("\n" + "="*60 + "\n")
     
-    # Example 2: Convert only sequences with multiple echoes
-    print("Example 2: Multi-echo sequences only (min 2 echoes)")
+    # Example 2: Convert with spatial sorting
+    print("Example 2: Multi-echo conversion with spatial sorting")
     try:
         result = converter.convert(
             sequence_type='general_echo',
             input_folder='/path/to/multiecho/dicoms',
             output_folder='/path/to/output_multiecho',
-            min_echoes=2,              # Only process groups with 2+ echoes
-            group_by_series=True,
-            sort_by_position=True
+            sort_by_position=True      # Sort slices by spatial position
         )
         print(f"✓ Multi-echo conversion successful!")
-        print(f"Processed {result.metadata['num_groups']} multi-echo groups")
+        print(f"Echo times found: {result.metadata.get('echo_times', [])}")
         
     except Exception as e:
         print(f"✗ Multi-echo conversion failed: {e}")
     
     print("\n" + "="*60 + "\n")
     
-    # Example 3: Process all echoes together (no series grouping)
-    print("Example 3: All echoes together (no series grouping)")
+    # Example 3: Convert without spatial sorting
+    print("Example 3: Multi-echo conversion without spatial sorting")
     try:
         result = converter.convert(
             sequence_type='general_echo',
             input_folder='/path/to/multiecho/dicoms',
             output_folder='/path/to/output_combined',
-            min_echoes=1,
-            group_by_series=False,     # Process all echoes together
-            sort_by_position=True
+            sort_by_position=False     # Skip spatial position sorting
         )
-        print(f"✓ Combined echo conversion successful!")
-        print(f"All echoes processed as one group")
+        print(f"✓ Conversion successful!")
+        print(f"Echo times found: {result.metadata.get('echo_times', [])}")
         
     except Exception as e:
         print(f"✗ Combined echo conversion failed: {e}")
@@ -81,26 +75,19 @@ def example_general_echo_conversion():
 def example_cli_usage():
     """Example CLI usage for the general echo converter."""
     
-    print("CLI Usage Examples for GeneralSeriesConverter:")
+    print("CLI Usage Examples for GeneralSeriesConverter (general_echo):")
     print("=" * 50)
     
     print("\n1. Basic conversion:")
     print("python -m dcm2nifti /path/to/dicoms /path/to/output general_echo")
     
-    print("\n2. Only process multi-echo sequences (2+ echoes):")
-    print("python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --min_echoes 2")
+    print("\n2. Sort by spatial position (default):")
+    print("python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --sort_by_position")
     
-    print("\n3. Process all echoes together (no series grouping):")
-    print("python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --no_group_by_series")
-    
-    print("\n4. Don't sort by spatial position:")
+    print("\n3. Don't sort by spatial position:")
     print("python -m dcm2nifti /path/to/dicoms /path/to/output general_echo --no_sort_by_position")
     
-    print("\n5. Combination of options:")
-    print("python -m dcm2nifti /path/to/dicoms /path/to/output general_echo \\")
-    print("    --min_echoes 3 --no_group_by_series --verbose")
-    
-    print("\n6. Get parameter information:")
+    print("\n4. Get parameter information:")
     print("python -m dcm2nifti --get-parameters general_echo")
 
 
@@ -111,26 +98,13 @@ def example_output_structure():
     print("=" * 30)
     print("""
     output_folder/
-    ├── conversion_metadata.txt          # Overall conversion metadata
-    ├── series_123/                      # First series group
-    │   ├── echo_01_TE_5.00ms.nii.gz    # Individual echo files
-    │   ├── echo_02_TE_10.00ms.nii.gz
-    │   ├── echo_03_TE_15.00ms.nii.gz
-    │   ├── 4d_multiecho.nii.gz         # 4D volume (if >1 echo)
-    │   └── echo_times.txt               # Echo time metadata
-    ├── series_456/                      # Second series group
-    │   ├── echo_01_TE_2.50ms.nii.gz
-    │   ├── echo_02_TE_7.50ms.nii.gz
-    │   ├── 4d_multiecho.nii.gz
-    │   └── echo_times.txt
-    └── all/                             # If group_by_series=False
-        ├── echo_01_TE_2.50ms.nii.gz
-        ├── echo_02_TE_5.00ms.nii.gz
-        ├── echo_03_TE_7.50ms.nii.gz
-        ├── echo_04_TE_10.00ms.nii.gz
-        ├── echo_05_TE_15.00ms.nii.gz
-        ├── 4d_multiecho.nii.gz
-        └── echo_times.txt
+    ├── 4d_array.nii.gz              # Main 4D (multi-echo) or 3D (single echo) output
+    ├── echo_1.nii.gz                # Individual echo files
+    ├── echo_2.nii.gz
+    ├── echo_3.nii.gz
+    ├── echo_times.txt               # Echo times in milliseconds
+    ├── spacing_wo_gap.txt           # Voxel spacing
+    └── conversion_metadata.json      # Conversion parameters and metadata
     """)
 
 
