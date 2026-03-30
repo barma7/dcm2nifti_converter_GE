@@ -41,7 +41,7 @@ class UTESRConverter(SequenceConverter):
     
     @property
     def optional_parameters(self) -> List[str]:
-        return ["coregister"]
+        return ["coregister", "remove_ute"]
     
     def validate_input(self, input_folder: Union[str, Path], **kwargs) -> bool:
         """
@@ -91,7 +91,7 @@ class UTESRConverter(SequenceConverter):
             input_folder: Path to the folder containing DICOM files
             output_folder: Path to the output folder
             series_numbers: List containing exactly 2 series numbers [UTE, IR-UTE]
-            **kwargs: Additional parameters
+            **kwargs: Additional parameters (coregister: bool, remove_ute: bool)
             
         Returns:
             ConversionResult: Result of the conversion process
@@ -108,7 +108,7 @@ class UTESRConverter(SequenceConverter):
             
             # Get parameters
             coregister = kwargs.get('coregister', False)
-
+            remove_ute = kwargs.get('remove_ute', False)
             # Create lists for individual series
             series_numbers_uTE = [series_numbers[0]] 
             series_numbers_IRuTE = [series_numbers[1]]
@@ -180,14 +180,15 @@ class UTESRConverter(SequenceConverter):
                             image_name = "PI_image_registered"   
                         else:
                             image_name = "echo_subtraction_image_registered"
-                    registered_image_path = output_folder_IRuTE / f'{image_name}.nii.gz'
+                    registered_image_path = output_folder_uTE / f'{image_name}.nii.gz'
                     save_nifti_image(image, str(registered_image_path))
                 
                 # Extract arrays from the first echo of each series
                 echo_array_uTE = sitk.GetArrayFromImage(registered_uTE_images[0])
             else:
                 echo_array_uTE = sitk.GetArrayFromImage(echo_images_uTE[0])
-                echo_array_IRuTE = sitk.GetArrayFromImage(echo_images_IRuTE[0])
+            
+            echo_array_IRuTE = sitk.GetArrayFromImage(echo_images_IRuTE[0])
             
             # Create SR index array by taking the ratio of uTE and IRuTE
             # Avoid division by zero by adding small epsilon
@@ -229,6 +230,16 @@ class UTESRConverter(SequenceConverter):
             
             self.logger.info(f"UTE_SR conversion completed successfully")
             self.logger.info(f"SR index range: {metadata['sr_index_range']}")
+
+            # if remove_ute is True, we will will remove the uTE folder and its contents from the output files list and delete the folder
+            if remove_ute:
+                for file in output_files:
+                    if 'uTE' in file:
+                        output_files.remove(file)
+                # delete the uTE folder and its contents
+                for file in output_folder_uTE.glob('*'):
+                    file.unlink()
+                output_folder_uTE.rmdir()
             
             return ConversionResult(
                 images=[sr_index_image] + echo_images_uTE + echo_images_IRuTE,

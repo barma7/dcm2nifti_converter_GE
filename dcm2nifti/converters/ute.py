@@ -66,16 +66,15 @@ class UTEConverter(SequenceConverter):
         if not series_numbers:
             self.logger.error(
                 "UTE conversion requires 'series_numbers' parameter. "
-                "Multiple echo times should be acquired as separate series."
+                "Multiple acquisitions that belong together in time should be passed as separate series."
             )
             raise ValueError("UTE conversion requires series_numbers parameter")
         
-        if len(series_numbers) < 2:
-            self.logger.error(
-                f"UTE conversion requires at least 2 series (found {len(series_numbers)}). "
-                "Multiple echo times should be acquired as separate series."
+        
+        self.logger.error(
+            f"UTE conversion with {len(series_numbers)} series. "
+            f"Multiple acquisitions that belong together in time should be passed as separate series."
             )
-            raise ValueError(f"UTE requires at least 2 series, found {len(series_numbers)}")
         
         input_path = Path(input_folder)
         
@@ -120,13 +119,21 @@ class UTEConverter(SequenceConverter):
         # Get parameters
         series_numbers = kwargs.get('series_numbers', [])
         coregister = kwargs.get('coregister', False)
-        
+
         if not series_numbers:
             raise ValueError(
                 "UTE conversion requires 'series_numbers' parameter. "
                 "Example: series_numbers=['5', '6', '7'] for three echo times."
             )
         
+        # if len(series_numbers) < 2: then no co-registration possible, but we can still convert without registration
+        if len(series_numbers) < 2 and coregister:
+            self.logger.warning(
+                "Co-registration requested but only one series provided. "
+                "Proceeding with conversion without registration."
+            )
+            coregister = False
+
         # Create output directory
         output_path = self._create_output_directory(output_folder)
         
@@ -181,7 +188,14 @@ class UTEConverter(SequenceConverter):
                         
                 # Extract echo time
                 echo_headers = copy_image_headers(echo_dicom_files)
-                echo_time = float(echo_headers[1].get('EchoTime', 0))
+                #  NOTE: Sometimes uTE echo times after the first one are not stored properly in DICOM headers,
+                #  so we perform a check and assume to take the maximum echo time if multiple different echo times are found for this echo 
+                # (which is the case when echo times are not stored properly and default to 0)
+                
+                # extract unique echo times from all slices for this echo
+                unique_echo_times = set([float(h.get('EchoTime', 0)) for h in echo_headers])
+                # take the maximum echo time if multiple different echo times are found, otherwise take the single unique echo time
+                echo_time = max(unique_echo_times) if len(unique_echo_times) > 1 else list(unique_echo_times)[0]
                 
                 echo_images.append(echo_image)
                 echo_times.append(echo_time)
