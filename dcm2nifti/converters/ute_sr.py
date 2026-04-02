@@ -41,7 +41,7 @@ class UTESRConverter(SequenceConverter):
     
     @property
     def optional_parameters(self) -> List[str]:
-        return ["coregister", "remove_ute"]
+        return ["coregister", "remove_ute", "save_echoes_separately"]
     
     def validate_input(self, input_folder: Union[str, Path], **kwargs) -> bool:
         """
@@ -109,6 +109,7 @@ class UTESRConverter(SequenceConverter):
             # Get parameters
             coregister = kwargs.get('coregister', False)
             remove_ute = kwargs.get('remove_ute', False)
+            save_echoes_separately = kwargs.get('save_echoes_separately', False)
             # Create lists for individual series
             series_numbers_uTE = [series_numbers[0]] 
             series_numbers_IRuTE = [series_numbers[1]]
@@ -123,12 +124,12 @@ class UTESRConverter(SequenceConverter):
             # Convert the two series separately using UTE converter
             self.logger.info("Converting UTE series...")
             ute_result = self.ute_converter.convert(
-                input_folder, str(output_folder_uTE), series_numbers=series_numbers_uTE, coregister=False
+                input_folder, str(output_folder_uTE), series_numbers=series_numbers_uTE, coregister=False, save_echoes_separately=save_echoes_separately
             )
 
             self.logger.info("Converting IR-UTE series...")
             irute_result = self.ute_converter.convert(
-                input_folder, str(output_folder_IRuTE), series_numbers=series_numbers_IRuTE, coregister=False
+                input_folder, str(output_folder_IRuTE), series_numbers=series_numbers_IRuTE, coregister=False, save_echoes_separately=save_echoes_separately
             )
             
             # Get the echo images from the results

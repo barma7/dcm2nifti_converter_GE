@@ -45,7 +45,7 @@ class UTEConverter(SequenceConverter):
     
     @property
     def optional_parameters(self) -> List[str]:
-        return ["coregister"]
+        return ["coregister", "save_echoes_separately"]
     
     def validate_input(self, input_folder: Union[str, Path], **kwargs) -> bool:
         """
@@ -105,7 +105,7 @@ class UTEConverter(SequenceConverter):
             **kwargs: Additional parameters
                 series_numbers (List[str]): List of series numbers to combine
                 coregister (bool): Whether to perform co-registration
-            
+                save_echoes_separately (bool): Whether to save each echo separately
         Returns:
             ConversionResult containing converted images and metadata
         """
@@ -119,7 +119,7 @@ class UTEConverter(SequenceConverter):
         # Get parameters
         series_numbers = kwargs.get('series_numbers', [])
         coregister = kwargs.get('coregister', False)
-
+        self.save_echoes_separately = kwargs.get('save_echoes_separately', False)
         if not series_numbers:
             raise ValueError(
                 "UTE conversion requires 'series_numbers' parameter. "
@@ -207,9 +207,15 @@ class UTEConverter(SequenceConverter):
         sorted_indices = np.argsort(echo_times)
         echo_images_sorted = [echo_images[i] for i in sorted_indices]
         echo_times_sorted = [echo_times[i] for i in sorted_indices]
+
+        output_files = []
+        if self.save_echoes_separately:
+            for idx, (echo_image, echo_time) in enumerate(zip(echo_images_sorted, echo_times_sorted)):
+                echo_path = output_path / f'echo_{idx}.nii.gz'
+                save_nifti_image(echo_image, echo_path)
+                output_files.append(str(echo_path))
         
         # Calculate Porosity Index if multiple echoes available
-        output_files = []
         if len(echo_times_sorted) > 1:
             self._calculate_and_save_porosity_index_and_echo_subtraction(echo_images_sorted, echo_times_sorted, output_path, output_files)
         
